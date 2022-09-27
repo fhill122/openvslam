@@ -26,10 +26,8 @@ public:
 
     /**
      * Perform optimization
-     * @param lead_keyfrm_id_in_global_BA
-     * @param force_stop_flag
      */
-    void optimize(const unsigned int lead_keyfrm_id_in_global_BA = 0, bool* const force_stop_flag = nullptr) const;
+    void optimize() const;
 
 private:
     //! map database

@@ -218,15 +218,6 @@ public:
     //! identifier for local map update
     unsigned int local_map_update_identifier = 0;
 
-    //-----------------------------------------
-    // for loop BA
-
-    //! identifier for loop BA
-    unsigned int loop_BA_identifier_ = 0;
-    //! camera pose AFTER loop BA
-    Mat44_t cam_pose_cw_after_loop_BA_;
-    //! camera pose BEFORE loop BA
-    Mat44_t cam_pose_cw_before_BA_;
 
     //-----------------------------------------
     // meta information

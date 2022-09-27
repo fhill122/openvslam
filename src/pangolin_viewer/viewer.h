@@ -158,7 +158,6 @@ private:
     std::unique_ptr<pangolin::Var<bool>> menu_show_local_map_;
     std::unique_ptr<pangolin::Var<bool>> menu_show_graph_;
     std::unique_ptr<pangolin::Var<bool>> menu_mapping_mode_;
-    std::unique_ptr<pangolin::Var<bool>> menu_loop_detection_mode_;
     std::unique_ptr<pangolin::Var<bool>> menu_pause_;
     std::unique_ptr<pangolin::Var<bool>> menu_reset_;
     std::unique_ptr<pangolin::Var<bool>> menu_terminate_;
@@ -171,7 +170,6 @@ private:
     // current state
     bool follow_camera_ = true;
     bool mapping_mode_ = true;
-    bool loop_detection_mode_ = true;
 
     // viewer appearance
     const std::string map_viewer_name_{"PangolinViewer: Map Viewer"};

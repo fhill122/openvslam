@@ -5,7 +5,6 @@
 #include "openvslam/data/frame.h"
 #include "openvslam/data/multi_frame.h"
 #include "openvslam/module/initializer.h"
-#include "openvslam/module/relocalizer.h"
 #include "openvslam/module/keyframe_inserter.h"
 #include "openvslam/module/frame_tracker.h"
 
@@ -19,7 +18,6 @@ namespace openvslam {
 
 class system;
 class mapping_module;
-class global_optimization_module;
 
 namespace data {
 class map_database;
@@ -38,13 +36,6 @@ enum class tracker_state_t {
     Lost
 };
 
-struct pose_request {
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-    bool mode_2d_;
-    Mat44_t pose_;
-    Vec3_t normal_vector_;
-};
 
 class tracking_module {
 public:
@@ -59,9 +50,6 @@ public:
 
     //! Set the mapping module
     void set_mapping_module(mapping_module* mapper);
-
-    //! Set the global optimization module
-    void set_global_optimization_module(global_optimization_module* global_optimizer);
 
     //-----------------------------------------
     // interfaces
@@ -93,11 +81,6 @@ public:
     //! Track multi cam
     std::shared_ptr<Mat44_t> track_multi_images(const std::vector<cv::Mat> &imgs, const double timestamp,
                                                const std::vector<cv::Mat> &masks = std::vector<cv::Mat>());
-
-    //! Request to update the pose to a given one.
-    //! Return failure in case if previous request was not finished yet.
-    bool request_relocalize_by_pose(const Mat44_t& pose);
-    bool request_relocalize_by_pose_2d(const Mat44_t& pose, const Vec3_t& normal_vector);
 
     //-----------------------------------------
     // management for reset process
@@ -135,15 +118,6 @@ public:
     //! depthmap factor (pixel_value / depthmap_factor = true_depth)
     double depthmap_factor_ = 1.0;
 
-    //! closest keyframes thresholds (by distance and angle) to relocalize with when updating by pose
-    double reloc_distance_threshold_ = 0.2;
-    double reloc_angle_threshold_ = 0.45;
-
-    //! If true, automatically try to relocalize when lost
-    bool enable_auto_relocalization_ = true;
-
-    //! If true, use robust_matcher for relocalization request
-    bool use_robust_matcher_for_relocalization_request_ = false;
 
     //-----------------------------------------
     // variables
@@ -177,12 +151,6 @@ protected:
     //! Track the current frame
     bool track_current_frame();
 
-    //! Relocalization by pose
-    bool relocalize_by_pose(const pose_request& request);
-
-    //! Get close keyframes
-    std::vector<std::shared_ptr<data::keyframe>> get_close_keyframes(const pose_request& request);
-
     //! Update the motion model using the current and last frames
     void update_motion_model();
 
@@ -211,8 +179,6 @@ protected:
     system* system_ = nullptr;
     //! mapping module
     mapping_module* mapper_ = nullptr;
-    //! global optimization module
-    global_optimization_module* global_optimizer_ = nullptr;
 
     // ORB extractors
     //! ORB extractor for left/monocular image
@@ -236,9 +202,6 @@ protected:
 
     //! frame tracker for current frame
     const module::frame_tracker frame_tracker_;
-
-    //! relocalizer
-    module::relocalizer relocalizer_;
 
     //! pose optimizer
     const optimize::pose_optimizer pose_optimizer_;
@@ -292,22 +255,6 @@ protected:
 
     //! Pause of the tracking module is requested or not
     bool pause_is_requested_ = false;
-
-    //-----------------------------------------
-    // force relocalization
-
-    //! Mutex for update pose request into given position
-    mutable std::mutex mtx_relocalize_by_pose_request_;
-    //! Update into a given position is requested or not
-    bool relocalize_by_pose_is_requested();
-    //! Get requested for relocalization pose
-    pose_request& get_relocalize_by_pose_request();
-    //! Finish update request. Returns true in case of request was made.
-    void finish_relocalize_by_pose_request();
-    //! Indicator of update pose request
-    bool relocalize_by_pose_is_requested_ = false;
-    //! Requested pose to update
-    pose_request relocalize_by_pose_request_;
 };
 
 } // namespace openvslam

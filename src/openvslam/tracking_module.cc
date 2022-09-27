@@ -2,7 +2,6 @@
 #include "openvslam/system.h"
 #include "openvslam/tracking_module.h"
 #include "openvslam/mapping_module.h"
-#include "openvslam/global_optimization_module.h"
 #include "openvslam/camera/base.h"
 #include "openvslam/data/landmark.h"
 #include "openvslam/data/map_database.h"
@@ -83,14 +82,9 @@ tracking_module::tracking_module(const std::shared_ptr<config>& cfg, system* sys
       true_depth_thr_(get_true_depth_thr(cam_rig_->cameras[0].get(), util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
       depthmap_factor_(get_depthmap_factor(cam_rig_->cameras[0].get(), util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
 
-      reloc_distance_threshold_(get_reloc_distance_threshold(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
-      reloc_angle_threshold_(get_reloc_angle_threshold(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
-      enable_auto_relocalization_(get_enable_auto_relocalization(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
-      use_robust_matcher_for_relocalization_request_(get_use_robust_matcher_for_relocalization_request(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
       system_(system), map_db_(map_db), bow_vocab_(bow_vocab), bow_db_(bow_db),
       initializer_(cfg->cam_rig_->isMono(), map_db, bow_db, util::yaml_optional_ref(cfg->yaml_node_, "Initializer")),
       frame_tracker_(10),
-      relocalizer_(bow_db_, util::yaml_optional_ref(cfg->yaml_node_, "Relocalizer")),
       pose_optimizer_(),
       keyfrm_inserter_(cfg->cam_rig_->isMono(), true_depth_thr_, map_db, bow_db, 0, cfg->cam_rig_->cameras[0]->fps_) {
     spdlog::debug("CONSTRUCT: tracking_module");
@@ -123,10 +117,6 @@ tracking_module::~tracking_module() {
 void tracking_module::set_mapping_module(mapping_module* mapper) {
     mapper_ = mapper;
     keyfrm_inserter_.set_mapping_module(mapper);
-}
-
-void tracking_module::set_global_optimization_module(global_optimization_module* global_optimizer) {
-    global_optimizer_ = global_optimizer;
 }
 
 void tracking_module::set_mapping_module_status(const bool mapping_is_enabled) {
@@ -185,7 +175,6 @@ std::shared_ptr<Mat44_t> tracking_module::track_stereo_image(const cv::Mat& left
     util::convert_to_grayscale(right_img_gray, cam_rig_->cameras[1]->color_order_);
 
     // create current frame object
-    // todo ivan. doing here. pass rig
     curr_frm_ = data::frame(img_gray_, right_img_gray, timestamp, extractor_left_, extractor_right_, bow_vocab_,
                             cam_rig_->cameras[0].get(), true_depth_thr_, mask);
 
@@ -253,47 +242,11 @@ std::shared_ptr<Mat44_t> tracking_module::track_multi_images(const vector<cv::Ma
         curr_mfrm_.frames.push_back(data::frame(imgs_gray_[i], timestamp, extractor_left_, bow_vocab_,
                                                 cam_rig_->cameras[i].get(), true_depth_thr_, final_masks[i]));
     }
+
+    mfTrack();
 }
 
-bool tracking_module::request_relocalize_by_pose(const Mat44_t& pose) {
-    std::lock_guard<std::mutex> lock(mtx_relocalize_by_pose_request_);
-    if (relocalize_by_pose_is_requested_) {
-        spdlog::warn("Can not process new pose update request while previous was not finished");
-        return false;
-    }
-    relocalize_by_pose_is_requested_ = true;
-    relocalize_by_pose_request_.mode_2d_ = false;
-    relocalize_by_pose_request_.pose_ = pose;
-    return true;
-}
 
-bool tracking_module::request_relocalize_by_pose_2d(const Mat44_t& pose, const Vec3_t& normal_vector) {
-    std::lock_guard<std::mutex> lock(mtx_relocalize_by_pose_request_);
-    if (relocalize_by_pose_is_requested_) {
-        spdlog::warn("Can not process new pose update request while previous was not finished");
-        return false;
-    }
-    relocalize_by_pose_is_requested_ = true;
-    relocalize_by_pose_request_.mode_2d_ = true;
-    relocalize_by_pose_request_.pose_ = pose;
-    relocalize_by_pose_request_.normal_vector_ = normal_vector;
-    return true;
-}
-
-bool tracking_module::relocalize_by_pose_is_requested() {
-    std::lock_guard<std::mutex> lock(mtx_relocalize_by_pose_request_);
-    return relocalize_by_pose_is_requested_;
-}
-
-pose_request& tracking_module::get_relocalize_by_pose_request() {
-    std::lock_guard<std::mutex> lock(mtx_relocalize_by_pose_request_);
-    return relocalize_by_pose_request_;
-}
-
-void tracking_module::finish_relocalize_by_pose_request() {
-    std::lock_guard<std::mutex> lock(mtx_relocalize_by_pose_request_);
-    relocalize_by_pose_is_requested_ = false;
-}
 
 void tracking_module::reset() {
     spdlog::info("resetting system");
@@ -302,7 +255,6 @@ void tracking_module::reset() {
     keyfrm_inserter_.reset();
 
     mapper_->request_reset();
-    global_optimizer_->request_reset();
 
     bow_db_->clear();
     map_db_->clear();
@@ -316,6 +268,7 @@ void tracking_module::reset() {
     tracking_state_ = tracker_state_t::NotInitialized;
 }
 
+// todo ivan. doing here
 void tracking_module::mfTrack() {
     if (tracking_state_ == tracker_state_t::NotInitialized) {
         tracking_state_ = tracker_state_t::Initializing;
@@ -478,12 +431,6 @@ bool tracking_module::initialize() {
 bool tracking_module::track_current_frame() {
     bool succeeded = false;
 
-    if (relocalize_by_pose_is_requested()) {
-        // Force relocalization by pose
-        succeeded = relocalize_by_pose(get_relocalize_by_pose_request());
-        return succeeded;
-    }
-
     if (tracking_state_ == tracker_state_t::Tracking) {
         // Tracking mode
         if (twist_is_valid_ && last_reloc_frm_id_ + 2 < curr_frm_.id_) {
@@ -497,52 +444,8 @@ bool tracking_module::track_current_frame() {
             succeeded = frame_tracker_.robust_match_based_track(curr_frm_, last_frm_, curr_frm_.ref_keyfrm_);
         }
     }
-    else if (enable_auto_relocalization_) {
-        // Lost mode
-        // try to relocalize
-        succeeded = relocalizer_.relocalize(curr_frm_);
-        if (succeeded) {
-            last_reloc_frm_id_ = curr_frm_.id_;
-        }
-    }
 
     return succeeded;
-}
-
-bool tracking_module::relocalize_by_pose(const pose_request& request) {
-    bool succeeded = false;
-    curr_frm_.set_cam_pose(request.pose_);
-
-    curr_frm_.compute_bow();
-    const auto candidates = get_close_keyframes(request);
-
-    if (!candidates.empty()) {
-        succeeded = relocalizer_.reloc_by_candidates(curr_frm_, candidates, use_robust_matcher_for_relocalization_request_);
-        if (succeeded) {
-            last_reloc_frm_id_ = curr_frm_.id_;
-        }
-    }
-    else {
-        curr_frm_.cam_pose_cw_is_valid_ = false;
-    }
-    finish_relocalize_by_pose_request();
-    return succeeded;
-}
-
-std::vector<std::shared_ptr<data::keyframe>> tracking_module::get_close_keyframes(const pose_request& request) {
-    if (request.mode_2d_) {
-        return map_db_->get_close_keyframes_2d(
-            request.pose_,
-            request.normal_vector_,
-            reloc_distance_threshold_,
-            reloc_angle_threshold_);
-    }
-    else {
-        return map_db_->get_close_keyframes(
-            request.pose_,
-            reloc_distance_threshold_,
-            reloc_angle_threshold_);
-    }
 }
 
 void tracking_module::update_motion_model() {

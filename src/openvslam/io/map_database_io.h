@@ -28,15 +28,6 @@ public:
      */
     ~map_database_io() = default;
 
-    /**
-     * Save the map database as MessagePack
-     */
-    void save_message_pack(const std::string& path);
-
-    /**
-     * Load the map database from MessagePack
-     */
-    void load_message_pack(const std::string& path);
 
 private:
     //! camera database

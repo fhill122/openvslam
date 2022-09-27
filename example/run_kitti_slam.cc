@@ -89,11 +89,6 @@ void mono_tracking(const std::shared_ptr<openvslam::config>& cfg,
             }
         }
 
-        // wait until the loop BA is finished
-        while (SLAM.loop_BA_is_running()) {
-            std::this_thread::sleep_for(std::chrono::microseconds(5000));
-        }
-
         // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER
         if (auto_term) {
@@ -203,12 +198,7 @@ void stereo_tracking(const std::shared_ptr<openvslam::config>& cfg,
                 break;
             }
         }
-
-        // wait until the loop BA is finished
-        while (SLAM.loop_BA_is_running()) {
-            std::this_thread::sleep_for(std::chrono::microseconds(5000));
-        }
-
+        
         // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER
         if (auto_term) {

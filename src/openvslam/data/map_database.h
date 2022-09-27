@@ -80,30 +80,6 @@ public:
     std::vector<std::shared_ptr<keyframe>> get_all_keyframes() const;
 
     /**
-     * Get closest keyframes to a given 2d pose
-     * @param pose Given 2d pose
-     * @param normal_vector normal vector of plane
-     * @param distance_threshold Maximum distance where close keyframes could be found
-     * @param angle_threshold Maximum angle between given pose and close keyframes
-     * @return Vector closest keyframes
-     */
-    std::vector<std::shared_ptr<keyframe>> get_close_keyframes_2d(const Mat44_t& pose,
-                                                                  const Vec3_t& normal_vector,
-                                                                  const double distance_threshold,
-                                                                  const double angle_threshold) const;
-
-    /**
-     * Get closest keyframes to a given pose
-     * @param pose Given pose
-     * @param distance_threshold Maximum distance where close keyframes could be found
-     * @param angle_threshold Maximum angle between given pose and close keyframes
-     * @return Vector closest keyframes
-     */
-    std::vector<std::shared_ptr<keyframe>> get_close_keyframes(const Mat44_t& pose,
-                                                               const double distance_threshold,
-                                                               const double angle_threshold) const;
-
-    /**
      * Get the number of keyframes
      * @return
      */
@@ -161,24 +137,6 @@ public:
      */
     void clear();
 
-    /**
-     * Load keyframes and landmarks from JSON
-     * @param cam_db
-     * @param bow_vocab
-     * @param bow_db
-     * @param json_keyfrms
-     * @param json_landmarks
-     */
-    void from_json(camera_database* cam_db, bow_vocabulary* bow_vocab, bow_database* bow_db,
-                   const nlohmann::json& json_keyfrms, const nlohmann::json& json_landmarks);
-
-    /**
-     * Dump keyframes and landmarks as JSON
-     * @param json_keyfrms
-     * @param json_landmarks
-     */
-    void to_json(nlohmann::json& json_keyfrms, nlohmann::json& json_landmarks);
-
     //! origin keyframe
     std::shared_ptr<keyframe> origin_keyfrm_ = nullptr;
 
@@ -187,42 +145,6 @@ public:
     static std::mutex mtx_database_;
 
 private:
-    /**
-     * Decode JSON and register keyframe information to the map database
-     * (NOTE: objects which are not constructed yet will be set as nullptr)
-     * @param cam_db
-     * @param bow_vocab
-     * @param bow_db
-     * @param id
-     * @param json_keyfrm
-     */
-    void register_keyframe(camera_database* cam_db, bow_vocabulary* bow_vocab, bow_database* bow_db,
-                           const unsigned int id, const nlohmann::json& json_keyfrm);
-
-    /**
-     * Decode JSON and register landmark information to the map database
-     * (NOTE: objects which are not constructed yet will be set as nullptr)
-     * @param id
-     * @param json_landmark
-     */
-    void register_landmark(const unsigned int id, const nlohmann::json& json_landmark);
-
-    /**
-     * Decode JSON and register essential graph information
-     * (NOTE: keyframe database must be completely constructed before calling this function)
-     * @param id
-     * @param json_keyfrm
-     */
-    void register_graph(const unsigned int id, const nlohmann::json& json_keyfrm);
-
-    /**
-     * Decode JSON and register keyframe-landmark associations
-     * (NOTE: keyframe and landmark database must be completely constructed before calling this function)
-     * @param keyfrm_id
-     * @param json_keyfrm
-     */
-    void register_association(const unsigned int keyfrm_id, const nlohmann::json& json_keyfrm);
-
     //! mutex for mutual exclusion controll between class methods
     mutable std::mutex mtx_map_access_;
 

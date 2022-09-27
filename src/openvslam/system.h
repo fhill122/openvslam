@@ -19,7 +19,6 @@ namespace openvslam {
 class config;
 class tracking_module;
 class mapping_module;
-class global_optimization_module;
 
 namespace camera {
 class base;
@@ -80,21 +79,6 @@ public:
     //! The mapping module is enabled or not
     bool mapping_module_is_enabled() const;
 
-    //! Enable the loop detector
-    void enable_loop_detector();
-
-    //! Disable the loop detector
-    void disable_loop_detector();
-
-    //! The loop detector is enabled or not
-    bool loop_detector_is_enabled() const;
-
-    //! Loop BA is running or not
-    bool loop_BA_is_running() const;
-
-    //! Abort the loop BA externally
-    void abort_loop_BA();
-
     //-----------------------------------------
     // data feeding methods
 
@@ -109,14 +93,6 @@ public:
     //! Feed an RGBD frame to SLAM system
     //! (Note: RGB and Depth images must be aligned)
     std::shared_ptr<Mat44_t> feed_RGBD_frame(const cv::Mat& rgb_img, const cv::Mat& depthmap, const double timestamp, const cv::Mat& mask = cv::Mat{});
-
-    //-----------------------------------------
-    // pose initializing/updating
-
-    //! Request to update the pose to a given one.
-    //! Return failure in case if previous request was not finished.
-    bool relocalize_by_pose(const Mat44_t& cam_pose_wc);
-    bool relocalize_by_pose_2d(const Mat44_t& cam_pose_wc, const Vec3_t& normal_vector);
 
     //-----------------------------------------
     // management for pause
@@ -152,10 +128,10 @@ private:
     //! Check reset request of the system
     void check_reset_request();
 
-    //! Pause the mapping module and the global optimization module
+    //! Pause the mapping module
     void pause_other_threads() const;
 
-    //! Resume the mapping module and the global optimization module
+    //! Resume the mapping module
     void resume_other_threads() const;
 
     //! config
@@ -180,11 +156,6 @@ private:
     mapping_module* mapper_ = nullptr;
     //! mapping thread
     std::unique_ptr<std::thread> mapping_thread_ = nullptr;
-
-    //! global optimization module
-    global_optimization_module* global_optimizer_ = nullptr;
-    //! global optimization thread
-    std::unique_ptr<std::thread> global_optimization_thread_ = nullptr;
 
     //! frame publisher
     std::shared_ptr<publish::frame_publisher> frame_publisher_ = nullptr;

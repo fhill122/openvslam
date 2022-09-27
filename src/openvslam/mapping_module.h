@@ -16,7 +16,6 @@ namespace openvslam {
 
 class config;
 class tracking_module;
-class global_optimization_module;
 
 namespace camera {
 class base;
@@ -38,8 +37,6 @@ public:
     //! Set the tracking module
     void set_tracking_module(tracking_module* tracker);
 
-    //! Set the global optimization module
-    void set_global_optimization_module(global_optimization_module* global_optimizer);
 
     //-----------------------------------------
     // main process
@@ -182,8 +179,6 @@ private:
 
     //! tracking module
     tracking_module* tracker_ = nullptr;
-    //! global optimization module
-    global_optimization_module* global_optimizer_ = nullptr;
 
     //! local map cleaner
     std::unique_ptr<module::local_map_cleaner> local_map_cleaner_ = nullptr;

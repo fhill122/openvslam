@@ -22,7 +22,7 @@ namespace optimize {
 global_bundle_adjuster::global_bundle_adjuster(data::map_database* map_db, const unsigned int num_iter, const bool use_huber_kernel)
     : map_db_(map_db), num_iter_(num_iter), use_huber_kernel_(use_huber_kernel) {}
 
-void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_global_BA, bool* const force_stop_flag) const {
+void global_bundle_adjuster::optimize() const {
     // 1. Collect the dataset
 
     const auto keyfrms = map_db_->get_all_keyframes();
@@ -37,10 +37,6 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
 
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(algorithm);
-
-    if (force_stop_flag) {
-        optimizer.setForceStopFlag(force_stop_flag);
-    }
 
     // 3. Convert each of the keyframe to the g2o vertex, then set it to the optimizer
 
@@ -143,10 +139,6 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
     optimizer.initializeOptimization();
     optimizer.optimize(num_iter_);
 
-    if (force_stop_flag && *force_stop_flag) {
-        return;
-    }
-
     // 6. Extract the result
 
     for (auto keyfrm : keyfrms) {
@@ -155,13 +147,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         }
         auto keyfrm_vtx = keyfrm_vtx_container.get_vertex(keyfrm);
         const auto cam_pose_cw = util::converter::to_eigen_mat(keyfrm_vtx->estimate());
-        if (lead_keyfrm_id_in_global_BA == 0) {
-            keyfrm->set_cam_pose(cam_pose_cw);
-        }
-        else {
-            keyfrm->cam_pose_cw_after_loop_BA_ = cam_pose_cw;
-            keyfrm->loop_BA_identifier_ = lead_keyfrm_id_in_global_BA;
-        }
+        keyfrm->set_cam_pose(cam_pose_cw);
     }
 
     for (unsigned int i = 0; i < lms.size(); ++i) {
@@ -180,14 +166,8 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         auto lm_vtx = lm_vtx_container.get_vertex(lm);
         const Vec3_t pos_w = lm_vtx->estimate();
 
-        if (lead_keyfrm_id_in_global_BA == 0) {
-            lm->set_pos_in_world(pos_w);
-            lm->update_normal_and_depth();
-        }
-        else {
-            lm->pos_w_after_global_BA_ = pos_w;
-            lm->loop_BA_identifier_ = lead_keyfrm_id_in_global_BA;
-        }
+        lm->set_pos_in_world(pos_w);
+        lm->update_normal_and_depth();
     }
 }
 

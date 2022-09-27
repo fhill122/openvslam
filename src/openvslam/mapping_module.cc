@@ -1,6 +1,5 @@
 #include "openvslam/type.h"
 #include "openvslam/mapping_module.h"
-#include "openvslam/global_optimization_module.h"
 #include "openvslam/data/keyframe.h"
 #include "openvslam/data/landmark.h"
 #include "openvslam/data/map_database.h"
@@ -46,9 +45,6 @@ void mapping_module::set_tracking_module(tracking_module* tracker) {
     tracker_ = tracker;
 }
 
-void mapping_module::set_global_optimization_module(global_optimization_module* global_optimizer) {
-    global_optimizer_ = global_optimizer;
-}
 
 void mapping_module::run() {
     spdlog::info("start mapping module");
@@ -75,8 +71,6 @@ void mapping_module::run() {
             while (keyframe_is_queued()) {
                 // create and extend the map with the new keyframe
                 mapping_with_new_keyframe();
-                // send the new keyframe to the global optimization module
-                global_optimizer_->queue_keyframe(cur_keyfrm_);
             }
             // pause and wait
             pause();
@@ -103,8 +97,6 @@ void mapping_module::run() {
 
         // create and extend the map with the new keyframe
         mapping_with_new_keyframe();
-        // send the new keyframe to the global optimization module
-        global_optimizer_->queue_keyframe(cur_keyfrm_);
 
         // LOCK end
         set_keyframe_acceptability(true);

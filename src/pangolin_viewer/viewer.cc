@@ -28,8 +28,7 @@ viewer::viewer(const YAML::Node& yaml_node, openvslam::system* system,
       camera_size_(yaml_node["camera_size"].as<float>(0.15)),
       camera_line_width_(yaml_node["camera_line_width"].as<unsigned int>(2)),
       cs_(yaml_node["color_scheme"].as<std::string>("black")),
-      mapping_mode_(system->mapping_module_is_enabled()),
-      loop_detection_mode_(system->loop_detector_is_enabled()) {}
+      mapping_mode_(system->mapping_module_is_enabled()){}
 
 void viewer::run() {
     is_terminated_ = false;
@@ -130,7 +129,6 @@ void viewer::create_menu_panel() {
     menu_show_local_map_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show Local Map", true, true));
     menu_show_graph_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show Graph", true, true));
     menu_mapping_mode_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Mapping", mapping_mode_, true));
-    menu_loop_detection_mode_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Loop Detection", loop_detection_mode_, true));
     menu_pause_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Pause", false, true));
     menu_reset_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Reset", false, false));
     menu_terminate_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Terminate", false, false));
@@ -375,7 +373,6 @@ void viewer::reset() {
     *menu_show_local_map_ = true;
     *menu_show_graph_ = true;
     *menu_mapping_mode_ = mapping_mode_;
-    *menu_loop_detection_mode_ = loop_detection_mode_;
 
     // reset menu button
     *menu_reset_ = false;
@@ -387,14 +384,6 @@ void viewer::reset() {
     }
     else {
         system_->disable_mapping_module();
-    }
-
-    // reset loop detector
-    if (loop_detection_mode_) {
-        system_->enable_loop_detector();
-    }
-    else {
-        system_->disable_loop_detector();
     }
 
     // reset internal state
@@ -421,16 +410,6 @@ void viewer::check_state_transition() {
     else if (!*menu_mapping_mode_ && mapping_mode_) {
         system_->disable_mapping_module();
         mapping_mode_ = false;
-    }
-
-    // loop detector
-    if (*menu_loop_detection_mode_ && !loop_detection_mode_) {
-        system_->enable_loop_detector();
-        loop_detection_mode_ = true;
-    }
-    else if (!*menu_loop_detection_mode_ && loop_detection_mode_) {
-        system_->disable_loop_detector();
-        loop_detection_mode_ = false;
     }
 }
 

@@ -170,7 +170,6 @@ void mapping_module::mapping_with_new_keyframe() {
     if (2 < map_db_->get_num_keyframes()) {
         local_bundle_adjuster_->optimize(cur_keyfrm_, &abort_local_BA_);
     }
-    local_map_cleaner_->remove_redundant_keyframes(cur_keyfrm_);
 }
 
 void mapping_module::store_new_keyframe() {
@@ -342,10 +341,6 @@ std::unordered_set<std::shared_ptr<data::keyframe>> mapping_module::get_second_o
     fuse_tgt_keyfrms.reserve(cur_covisibilities.size() * 2);
 
     for (const auto& first_order_covis : cur_covisibilities) {
-        if (first_order_covis->will_be_erased()) {
-            continue;
-        }
-
         // check if the keyframe is aleady inserted
         if (static_cast<bool>(fuse_tgt_keyfrms.count(first_order_covis))) {
             continue;
@@ -356,9 +351,6 @@ std::unordered_set<std::shared_ptr<data::keyframe>> mapping_module::get_second_o
         // get the covisibilities of the covisibility of the current keyframe
         const auto ngh_covisibilities = first_order_covis->graph_node_->get_top_n_covisibilities(second_order_thr);
         for (const auto& second_order_covis : ngh_covisibilities) {
-            if (second_order_covis->will_be_erased()) {
-                continue;
-            }
             // "the covisibilities of the covisibility" contains the current keyframe
             if (*second_order_covis == *cur_keyfrm_) {
                 continue;

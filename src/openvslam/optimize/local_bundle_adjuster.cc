@@ -39,9 +39,6 @@ void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyf
         if (!local_keyfrm) {
             continue;
         }
-        if (local_keyfrm->will_be_erased()) {
-            continue;
-        }
 
         local_keyfrms[local_keyfrm->id_] = local_keyfrm;
     }
@@ -76,9 +73,6 @@ void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyf
         for (const auto& obs : observations) {
             const auto fixed_keyfrm = obs.first.lock();
             if (!fixed_keyfrm) {
-                continue;
-            }
-            if (fixed_keyfrm->will_be_erased()) {
                 continue;
             }
 
@@ -165,9 +159,6 @@ void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyf
             const auto keyfrm = obs.first.lock();
             auto idx = obs.second;
             if (!keyfrm) {
-                continue;
-            }
-            if (keyfrm->will_be_erased()) {
                 continue;
             }
 

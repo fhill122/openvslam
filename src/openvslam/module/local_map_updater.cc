@@ -67,10 +67,6 @@ auto local_map_updater::find_first_local_keyframes(const keyframe_weights_t& key
         const auto& keyfrm = keyfrm_weight.first;
         const auto weight = keyfrm_weight.second;
 
-        if (keyfrm->will_be_erased()) {
-            continue;
-        }
-
         first_local_keyfrms.push_back(keyfrm);
 
         // avoid duplication
@@ -94,9 +90,6 @@ auto local_map_updater::find_second_local_keyframes(const std::vector<std::share
     // add the second-order keyframes to the local landmarks
     auto add_second_local_keyframe = [this, &second_local_keyfrms](const std::shared_ptr<data::keyframe>& keyfrm) {
         if (!keyfrm) {
-            return false;
-        }
-        if (keyfrm->will_be_erased()) {
             return false;
         }
         // avoid duplication

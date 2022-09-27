@@ -207,7 +207,7 @@ void viewer::draw_keyframes() {
         glLineWidth(keyfrm_line_width_);
         glColor3fv(cs_.kf_line_.data());
         for (const auto keyfrm : keyfrms) {
-            if (!keyfrm || keyfrm->will_be_erased()) {
+            if (!keyfrm) {
                 continue;
             }
             draw_camera(keyfrm->get_cam_pose_inv(), w);
@@ -226,7 +226,7 @@ void viewer::draw_keyframes() {
         glBegin(GL_LINES);
 
         for (const auto keyfrm : keyfrms) {
-            if (!keyfrm || keyfrm->will_be_erased()) {
+            if (!keyfrm ) {
                 continue;
             }
 
@@ -236,7 +236,7 @@ void viewer::draw_keyframes() {
             const auto covisibilities = keyfrm->graph_node_->get_covisibilities_over_weight(100);
             if (!covisibilities.empty()) {
                 for (const auto covisibility : covisibilities) {
-                    if (!covisibility || covisibility->will_be_erased()) {
+                    if (!covisibility) {
                         continue;
                     }
                     if (covisibility->id_ < keyfrm->id_) {

@@ -49,9 +49,6 @@ void global_bundle_adjuster::optimize() const {
         if (!keyfrm) {
             continue;
         }
-        if (keyfrm->will_be_erased()) {
-            continue;
-        }
 
         auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, keyfrm->id_ == 0);
         optimizer.addVertex(keyfrm_vtx);
@@ -93,9 +90,6 @@ void global_bundle_adjuster::optimize() const {
             auto keyfrm = obs.first.lock();
             auto idx = obs.second;
             if (!keyfrm) {
-                continue;
-            }
-            if (keyfrm->will_be_erased()) {
                 continue;
             }
 
@@ -142,9 +136,6 @@ void global_bundle_adjuster::optimize() const {
     // 6. Extract the result
 
     for (auto keyfrm : keyfrms) {
-        if (keyfrm->will_be_erased()) {
-            continue;
-        }
         auto keyfrm_vtx = keyfrm_vtx_container.get_vertex(keyfrm);
         const auto cam_pose_cw = util::converter::to_eigen_mat(keyfrm_vtx->estimate());
         keyfrm->set_cam_pose(cam_pose_cw);

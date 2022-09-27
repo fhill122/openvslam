@@ -185,24 +185,6 @@ public:
     bool depth_is_avaliable() const;
 
     //-----------------------------------------
-    // flags
-
-    /**
-     * Set this keyframe as non-erasable
-     */
-    void set_not_to_be_erased();
-
-    /**
-     * Erase this keyframe
-     */
-    void prepare_for_erasing();
-
-    /**
-     * Whether this keyframe will be erased shortly or not
-     */
-    bool will_be_erased();
-
-    //-----------------------------------------
     // for local map update
 
     //! identifier for local map update

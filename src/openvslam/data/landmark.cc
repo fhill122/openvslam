@@ -145,9 +145,7 @@ void landmark::compute_descriptor() {
         auto keyfrm = observation.first.lock();
         const auto idx = observation.second;
 
-        if (!keyfrm->will_be_erased()) {
-            descriptors.push_back(keyfrm->descriptors_.row(idx));
-        }
+        descriptors.push_back(keyfrm->descriptors_.row(idx));
     }
 
     // Get median of Hamming distance

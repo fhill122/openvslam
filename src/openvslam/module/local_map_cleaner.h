@@ -48,17 +48,7 @@ public:
      * Remove redundant landmarks
      */
     unsigned int remove_redundant_landmarks(const unsigned int cur_keyfrm_id, const bool depth_is_avaliable);
-
-    /**
-     * Remove redundant keyframes
-     */
-    unsigned int remove_redundant_keyframes(const std::shared_ptr<data::keyframe>& cur_keyfrm) const;
-
-    /**
-     * Count the valid and the redundant observations in the specified keyframe
-     */
-    void count_redundant_observations(const std::shared_ptr<data::keyframe>& keyfrm, unsigned int& num_valid_obs, unsigned int& num_redundant_obs) const;
-
+    
 private:
     //!
     double redundant_obs_ratio_thr_;

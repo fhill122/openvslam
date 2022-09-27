@@ -354,57 +354,6 @@ bool keyframe::depth_is_avaliable() const {
     return camera_->setup_type_ != camera::setup_type_t::Monocular;
 }
 
-void keyframe::set_not_to_be_erased() {
-    cannot_be_erased_ = true;
-}
-
-
-void keyframe::prepare_for_erasing() {
-    // cannot erase the origin
-    if (*this == *(map_db_->origin_keyfrm_)) {
-        return;
-    }
-
-    // cannot erase if the frag is raised
-    if (cannot_be_erased_) {
-        return;
-    }
-
-    // 1. raise the flag which indicates it has been erased
-
-    will_be_erased_ = true;
-
-    // 2. remove associations between keypoints and landmarks
-
-    {
-        std::lock_guard<std::mutex> lock(mtx_observations_);
-        for (const auto& lm : landmarks_) {
-            if (!lm) {
-                continue;
-            }
-            lm->erase_observation(shared_from_this());
-        }
-    }
-
-    // 3. recover covisibility graph and spanning tree
-
-    // remove covisibility information
-    graph_node_->erase_all_connections();
-    // recover spanning tree
-    graph_node_->recover_spanning_connections();
-
-    // 3. update frame statistics
-
-    map_db_->replace_reference_keyframe(shared_from_this(), graph_node_->get_spanning_parent());
-
-    // 4. remove myself from the databased
-
-    map_db_->erase_keyframe(shared_from_this());
-}
-
-bool keyframe::will_be_erased() {
-    return will_be_erased_;
-}
 
 } // namespace data
 } // namespace openvslam

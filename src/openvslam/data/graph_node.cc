@@ -281,9 +281,6 @@ void graph_node::recover_spanning_connections() {
 
         for (const auto& spanning_child : spanning_children_) {
             auto locked_spanning_child = spanning_child.lock();
-            if (locked_spanning_child->will_be_erased()) {
-                continue;
-            }
 
             // get intersection between the parent candidates and the spanning-child's covisibilities
             const auto child_covisibilities = locked_spanning_child->graph_node_->get_covisibilities();

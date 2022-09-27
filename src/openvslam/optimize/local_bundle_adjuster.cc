@@ -178,11 +178,21 @@ void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyf
             const auto sqrt_chi_sq = (keyfrm->camera_->setup_type_ == camera::setup_type_t::Monocular)
                                          ? sqrt_chi_sq_2D
                                          : sqrt_chi_sq_3D;
-            auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, local_lm, lm_vtx,
-                                                        idx, undist_keypt.pt.x, undist_keypt.pt.y, x_right,
-                                                        inv_sigma_sq, sqrt_chi_sq);
-            reproj_edge_wraps.push_back(reproj_edge_wrap);
-            optimizer.addEdge(reproj_edge_wrap.edge_);
+
+            if (keyfrm->camera_->model_type_==camera::model_type_t::VirtualCube){
+                const auto& cube_point = keyfrm->cube_keypts_.at(idx);
+                auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, local_lm, lm_vtx,
+                                                            idx, cube_point.u, cube_point.v, x_right,
+                                                            inv_sigma_sq, sqrt_chi_sq, true , cube_point.face);
+                reproj_edge_wraps.push_back(reproj_edge_wrap);
+                optimizer.addEdge(reproj_edge_wrap.edge_);
+            } else{
+                auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, local_lm, lm_vtx,
+                                                            idx, undist_keypt.pt.x, undist_keypt.pt.y, x_right,
+                                                            inv_sigma_sq, sqrt_chi_sq);
+                reproj_edge_wraps.push_back(reproj_edge_wrap);
+                optimizer.addEdge(reproj_edge_wrap.edge_);
+            }
         }
     }
 

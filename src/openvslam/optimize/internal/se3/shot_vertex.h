@@ -11,6 +11,7 @@ namespace optimize {
 namespace internal {
 namespace se3 {
 
+// note ivan. what's the difference btw this and g2o VertexSE3Expmap, why repeat the same thing?
 class shot_vertex final : public g2o::BaseVertex<6, g2o::SE3Quat> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

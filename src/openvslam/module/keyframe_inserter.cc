@@ -7,10 +7,10 @@
 namespace openvslam {
 namespace module {
 
-keyframe_inserter::keyframe_inserter(const camera::setup_type_t setup_type, const float true_depth_thr,
+keyframe_inserter::keyframe_inserter(bool is_mono, const float true_depth_thr,
                                      data::map_database* map_db, data::bow_database* bow_db,
                                      const unsigned int min_num_frms, const unsigned int max_num_frms)
-    : setup_type_(setup_type), true_depth_thr_(true_depth_thr),
+    : is_mono_(is_mono), true_depth_thr_(true_depth_thr),
       map_db_(map_db), bow_db_(bow_db),
       min_num_frms_(min_num_frms), max_num_frms_(max_num_frms) {}
 
@@ -72,7 +72,7 @@ bool keyframe_inserter::new_keyframe_is_needed(const data::frame& curr_frm, cons
     }
 
     // Stop the local bundle adjustment if the mapping module is in the process, then add a new keyframe
-    if (setup_type_ != camera::setup_type_t::Monocular
+    if (!is_mono_
         && mapper_->get_num_queued_keyframes() <= 2) {
         mapper_->abort_local_BA();
         return true;
@@ -87,13 +87,14 @@ std::shared_ptr<data::keyframe> keyframe_inserter::insert_new_keyframe(data::fra
         return nullptr;
     }
 
-    curr_frm.update_pose_params();
+    // note ivan. why the hell we need to call update_pose_params here??
+    // curr_frm.update_pose_params();
     auto keyfrm = data::keyframe::make_keyframe(curr_frm, map_db_, bow_db_);
 
     frm_id_of_last_keyfrm_ = curr_frm.id_;
 
     // Queue up the keyframe to the mapping module
-    if (setup_type_ == camera::setup_type_t::Monocular) {
+    if (is_mono_) {
         queue_keyframe(keyfrm);
         return keyfrm;
     }

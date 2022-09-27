@@ -3,6 +3,7 @@
 
 #include "openvslam/type.h"
 #include "openvslam/camera/base.h"
+#include "openvslam/camera/cube_space.h"
 #include "openvslam/data/graph_node.h"
 #include "openvslam/data/bow_vocabulary.h"
 
@@ -259,6 +260,8 @@ public:
     const std::vector<cv::KeyPoint> keypts_;
     //! undistorted keypoints of monocular or stereo left image
     const std::vector<cv::KeyPoint> undist_keypts_;
+    //! if using cube space
+    std::vector<camera::CubeSpace::CubePoint> cube_keypts_;
     //! bearing vectors
     const eigen_alloc_vector<Vec3_t> bearings_;
 

@@ -85,8 +85,10 @@ bool relocalizer::reloc_by_candidates(data::frame& curr_frm,
             continue;
         }
 
-        curr_frm.cam_pose_cw_ = pnp_solver->get_best_cam_pose();
-        curr_frm.update_pose_params();
+        // curr_frm.cam_pose_cw_ = pnp_solver->get_best_cam_pose();
+        // curr_frm.update_pose_params();
+        // note ivan. why not this??
+        curr_frm.set_cam_pose(pnp_solver->get_best_cam_pose());
 
         // 2. Apply pose optimizer
 

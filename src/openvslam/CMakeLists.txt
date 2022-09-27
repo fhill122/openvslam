@@ -130,6 +130,7 @@ target_include_directories(${PROJECT_NAME}
                            "$<BUILD_INTERFACE:${json_INCLUDE_DIR}>"
                            "$<BUILD_INTERFACE:${spdlog_INCLUDE_DIR}>"
                            "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/>"
+                           "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/3rd>"
                            "$<INSTALL_INTERFACE:include/openvslam/3rd/json/include>"
                            "$<INSTALL_INTERFACE:include/openvslam/3rd/spdlog/include>"
                            "$<INSTALL_INTERFACE:include/>")
@@ -193,3 +194,7 @@ add_subdirectory(optimize)
 add_subdirectory(publish)
 add_subdirectory(solve)
 add_subdirectory(util)
+
+
+include(${PROJECT_SOURCE_DIR}/cmake/GroupSourcesByFolder.cmake)
+GroupSourcesByFolder(${PROJECT_NAME})

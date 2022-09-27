@@ -135,6 +135,17 @@ Mat33_t perspective::get_camera_matrix(camera::base* camera) {
             auto c = static_cast<camera::radial_division*>(camera);
             return c->eigen_cam_matrix_;
         }
+        case camera::model_type_t::VirtualCube:{
+            auto c = static_cast<camera::CubeSpace*>(camera);
+            switch (c->pimpl_->model_type_) {
+                case camera::model_type_t::Perspective: {
+                    auto c_base = static_cast<camera::perspective*>(c->pimpl_.get());
+                    return c_base->eigen_cam_matrix_;
+                }
+                default:
+                    abort(); // not implemented yet
+            }
+        }
         default: {
             throw std::runtime_error("Cannot get a camera matrix from the camera model");
         }

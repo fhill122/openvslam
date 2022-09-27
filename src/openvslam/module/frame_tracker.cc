@@ -12,8 +12,8 @@
 namespace openvslam {
 namespace module {
 
-frame_tracker::frame_tracker(camera::base* camera, const unsigned int num_matches_thr)
-    : camera_(camera), num_matches_thr_(num_matches_thr), pose_optimizer_() {}
+frame_tracker::frame_tracker(const unsigned int num_matches_thr)
+    : num_matches_thr_(num_matches_thr), pose_optimizer_() {}
 
 bool frame_tracker::motion_based_track(data::frame& curr_frm, const data::frame& last_frm, const Mat44_t& velocity) const {
     match::projection projection_matcher(0.9, true);
@@ -25,7 +25,7 @@ bool frame_tracker::motion_based_track(data::frame& curr_frm, const data::frame&
     std::fill(curr_frm.landmarks_.begin(), curr_frm.landmarks_.end(), nullptr);
 
     // Reproject the 3D points observed in the last frame and find 2D-3D matches
-    const float margin = (camera_->setup_type_ != camera::setup_type_t::Stereo) ? 20 : 10;
+    const float margin = 20;
     auto num_matches = projection_matcher.match_current_and_last_frames(curr_frm, last_frm, margin);
 
     if (num_matches < num_matches_thr_) {

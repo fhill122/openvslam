@@ -16,19 +16,22 @@ namespace camera {
 enum class setup_type_t {
     Monocular = 0,
     Stereo = 1,
-    RGBD = 2
+    RGBD = 2,
+    MultiCam = 3
 };
 
-const std::array<std::string, 3> setup_type_to_string = {{"Monocular", "Stereo", "RGBD"}};
+const std::array<std::string, 4> setup_type_to_string = {{"Monocular", "Stereo", "RGBD", "MultiCam"}};
 
 enum class model_type_t {
     Perspective = 0,
     Fisheye = 1,
     Equirectangular = 2,
-    RadialDivision = 3
+    RadialDivision = 3,
+    VirtualCube = 4
 };
 
-const std::array<std::string, 4> model_type_to_string = {{"Perspective", "Fisheye", "Equirectangular", "RadialDivision"}};
+const std::array<std::string, 5> model_type_to_string = {{"Perspective", "Fisheye", "Equirectangular",
+        "RadialDivision", "VirtualCube"}};
 
 enum class color_order_t {
     Gray = 0,
@@ -73,7 +76,7 @@ public:
     std::string get_setup_type_string() const { return setup_type_to_string.at(static_cast<unsigned int>(setup_type_)); }
     //! Load setup type from YAML
     static setup_type_t load_setup_type(const YAML::Node& yaml_node);
-    //! Load setup type from string
+    //! Load setup type from string (called for json loading)
     static setup_type_t load_setup_type(const std::string& setup_type_str);
 
     //! model type

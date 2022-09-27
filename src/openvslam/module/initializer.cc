@@ -13,10 +13,10 @@
 namespace openvslam {
 namespace module {
 
-initializer::initializer(const camera::setup_type_t setup_type,
+initializer::initializer(bool is_mono,
                          data::map_database* map_db, data::bow_database* bow_db,
                          const YAML::Node& yaml_node)
-    : setup_type_(setup_type), map_db_(map_db), bow_db_(bow_db),
+    : is_mono_(is_mono), map_db_(map_db), bow_db_(bow_db),
       num_ransac_iters_(yaml_node["num_ransac_iterations"].as<unsigned int>(100)),
       min_num_triangulated_(yaml_node["num_min_triangulated_pts"].as<unsigned int>(50)),
       parallax_deg_thr_(yaml_node["parallax_deg_threshold"].as<float>(1.0)),
@@ -54,41 +54,32 @@ unsigned int initializer::get_initial_frame_id() const {
 }
 
 bool initializer::initialize(data::frame& curr_frm) {
-    switch (setup_type_) {
-        case camera::setup_type_t::Monocular: {
-            // construct an initializer if not constructed
-            if (state_ == initializer_state_t::NotReady) {
-                create_initializer(curr_frm);
-                return false;
-            }
-
-            // try to initialize
-            if (!try_initialize_for_monocular(curr_frm)) {
-                // failed
-                return false;
-            }
-
-            // create new map if succeeded
-            create_map_for_monocular(curr_frm);
-            break;
+    if (is_mono_){
+        // construct an initializer if not constructed
+        if (state_ == initializer_state_t::NotReady) {
+            create_initializer(curr_frm);
+            return false;
         }
-        case camera::setup_type_t::Stereo:
-        case camera::setup_type_t::RGBD: {
-            state_ = initializer_state_t::Initializing;
 
-            // try to initialize
-            if (!try_initialize_for_stereo(curr_frm)) {
-                // failed
-                return false;
-            }
+        // try to initialize
+        if (!try_initialize_for_monocular(curr_frm)) {
+            // failed
+            return false;
+        }
 
-            // create new map if succeeded
-            create_map_for_stereo(curr_frm);
-            break;
+        // create new map if succeeded
+        create_map_for_monocular(curr_frm);
+    } else{
+        state_ = initializer_state_t::Initializing;
+
+        // try to initialize
+        if (!try_initialize_for_stereo(curr_frm)) {
+            // failed
+            return false;
         }
-        default: {
-            throw std::runtime_error("Undefined camera setup");
-        }
+
+        // create new map if succeeded
+        create_map_for_stereo(curr_frm);
     }
 
     // check the state is succeeded or not
@@ -118,6 +109,7 @@ void initializer::create_initializer(data::frame& curr_frm) {
     initializer_.reset(nullptr);
     switch (init_frm_.camera_->model_type_) {
         case camera::model_type_t::Perspective:
+        case camera::model_type_t::VirtualCube: // todo ivan. fix this
         case camera::model_type_t::Fisheye:
         case camera::model_type_t::RadialDivision: {
             initializer_ = std::unique_ptr<initialize::perspective>(new initialize::perspective(init_frm_,

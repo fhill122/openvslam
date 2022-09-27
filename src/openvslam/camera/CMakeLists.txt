@@ -10,7 +10,10 @@ target_sources(${PROJECT_NAME}
                ${CMAKE_CURRENT_SOURCE_DIR}/perspective.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/fisheye.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/equirectangular.cc
-               ${CMAKE_CURRENT_SOURCE_DIR}/radial_division.cc)
+               ${CMAKE_CURRENT_SOURCE_DIR}/radial_division.cc
+               ${CMAKE_CURRENT_SOURCE_DIR}/cube_space.cc
+               ${CMAKE_CURRENT_SOURCE_DIR}/fake_stereo.cc
+)
 
 # Install headers
 file(GLOB HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/*.h")

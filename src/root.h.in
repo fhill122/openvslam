@@ -1,0 +1,9 @@
+/*
+ * Created by Ivan B on 2021/12/16.
+ */
+
+#ifndef SRC_ROOT_H_
+#define SRC_ROOT_H_
+
+constexpr char kRootDir[] = "@CMAKE_SOURCE_DIR@";
+#endif //SRC_ROOT_H_

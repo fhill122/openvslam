@@ -2,6 +2,7 @@
 #include "openvslam/camera/fisheye.h"
 #include "openvslam/camera/equirectangular.h"
 #include "openvslam/camera/radial_division.h"
+#include "openvslam/camera/cube_space.h"
 #include "openvslam/data/common.h"
 #include "openvslam/data/frame.h"
 #include "openvslam/data/keyframe.h"
@@ -44,6 +45,11 @@ frame::frame(const cv::Mat& img_gray, const double timestamp,
     // Convert to bearing vector
     camera->convert_keypoints_to_bearings(undist_keypts_, bearings_);
 
+    // cube space
+    if (camera_->model_type_==camera::model_type_t::VirtualCube){
+        dynamic_cast<camera::CubeSpace*>(camera_)->convert_bearings_to_cube(bearings_, cube_keypts_);
+    }
+
     // Initialize association with 3D points
     landmarks_ = std::vector<std::shared_ptr<landmark>>(num_keypts_, nullptr);
     outlier_flags_ = std::vector<bool>(num_keypts_, false);
@@ -75,6 +81,7 @@ frame::frame(const cv::Mat& left_img_gray, const cv::Mat& right_img_gray, const 
     camera_->undistort_keypoints(keypts_, undist_keypts_);
 
     // Estimate depth with stereo match
+    // todo ivan. implement stereo with cube space
     match::stereo stereo_matcher(extractor_left->image_pyramid_, extractor_right_->image_pyramid_,
                                  keypts_, keypts_right_, descriptors_, descriptors_right_,
                                  scale_factors_, inv_scale_factors_,
@@ -84,38 +91,10 @@ frame::frame(const cv::Mat& left_img_gray, const cv::Mat& right_img_gray, const 
     // Convert to bearing vector
     camera->convert_keypoints_to_bearings(undist_keypts_, bearings_);
 
-    // Initialize association with 3D points
-    landmarks_ = std::vector<std::shared_ptr<landmark>>(num_keypts_, nullptr);
-    outlier_flags_ = std::vector<bool>(num_keypts_, false);
-
-    // Assign all the keypoints into grid
-    assign_keypoints_to_grid(camera_, undist_keypts_, keypt_indices_in_cells_);
-}
-
-frame::frame(const cv::Mat& img_gray, const cv::Mat& img_depth, const double timestamp,
-             feature::orb_extractor* extractor, bow_vocabulary* bow_vocab,
-             camera::base* camera, const float depth_thr,
-             const cv::Mat& mask)
-    : id_(next_id_++), bow_vocab_(bow_vocab), extractor_(extractor), extractor_right_(nullptr),
-      timestamp_(timestamp), camera_(camera), depth_thr_(depth_thr) {
-    // Get ORB scale
-    update_orb_info();
-
-    // Extract ORB feature
-    extract_orb(img_gray, mask);
-    num_keypts_ = keypts_.size();
-    if (keypts_.empty()) {
-        spdlog::warn("frame {}: cannot extract any keypoints", id_);
+    // cube space
+    if (camera_->model_type_==camera::model_type_t::VirtualCube){
+        dynamic_cast<camera::CubeSpace*>(camera_)->convert_bearings_to_cube(bearings_, cube_keypts_);
     }
-
-    // Undistort keypoints
-    camera_->undistort_keypoints(keypts_, undist_keypts_);
-
-    // Calculate disparity from depth
-    compute_stereo_from_depth(img_depth);
-
-    // Convert to bearing vector
-    camera->convert_keypoints_to_bearings(undist_keypts_, bearings_);
 
     // Initialize association with 3D points
     landmarks_ = std::vector<std::shared_ptr<landmark>>(num_keypts_, nullptr);
@@ -128,7 +107,10 @@ frame::frame(const cv::Mat& img_gray, const cv::Mat& img_depth, const double tim
 void frame::set_cam_pose(const Mat44_t& cam_pose_cw) {
     cam_pose_cw_is_valid_ = true;
     cam_pose_cw_ = cam_pose_cw;
-    update_pose_params();
+    rot_cw_ = cam_pose_cw_.block<3, 3>(0, 0);
+    rot_wc_ = rot_cw_.transpose();
+    trans_cw_ = cam_pose_cw_.block<3, 1>(0, 3);
+    cam_center_ = -rot_cw_.transpose() * trans_cw_;
 }
 
 void frame::set_cam_pose(const g2o::SE3Quat& cam_pose_cw) {
@@ -144,13 +126,6 @@ Mat44_t frame::get_cam_pose_inv() const {
     cam_pose_wc.block<3, 3>(0, 0) = rot_wc_;
     cam_pose_wc.block<3, 1>(0, 3) = cam_center_;
     return cam_pose_wc;
-}
-
-void frame::update_pose_params() {
-    rot_cw_ = cam_pose_cw_.block<3, 3>(0, 0);
-    rot_wc_ = rot_cw_.transpose();
-    trans_cw_ = cam_pose_cw_.block<3, 1>(0, 3);
-    cam_center_ = -rot_cw_.transpose() * trans_cw_;
 }
 
 Vec3_t frame::get_cam_center() const {
@@ -271,6 +246,9 @@ Vec3_t frame::triangulate_stereo(const unsigned int idx) const {
                 return Vec3_t::Zero();
             }
         }
+        case camera::model_type_t::VirtualCube:{
+            // todo ivan. implement stereo
+        }
     }
 
     return Vec3_t::Zero();
@@ -286,31 +264,6 @@ void frame::extract_orb(const cv::Mat& img, const cv::Mat& mask, const image_sid
             extractor_right_->extract(img, mask, keypts_right_, descriptors_right_);
             break;
         }
-    }
-}
-
-void frame::compute_stereo_from_depth(const cv::Mat& img_depth) {
-    assert(camera_->setup_type_ == camera::setup_type_t::RGBD);
-
-    // Initialize with invalid value
-    stereo_x_right_ = std::vector<float>(num_keypts_, -1);
-    depths_ = std::vector<float>(num_keypts_, -1);
-
-    for (unsigned int idx = 0; idx < num_keypts_; idx++) {
-        const auto& keypt = keypts_.at(idx);
-        const auto& undist_keypt = undist_keypts_.at(idx);
-
-        const float x = keypt.pt.x;
-        const float y = keypt.pt.y;
-
-        const float depth = img_depth.at<float>(y, x);
-
-        if (depth <= 0) {
-            continue;
-        }
-
-        depths_.at(idx) = depth;
-        stereo_x_right_.at(idx) = undist_keypt.pt.x - camera_->focal_x_baseline_ / depth;
     }
 }
 

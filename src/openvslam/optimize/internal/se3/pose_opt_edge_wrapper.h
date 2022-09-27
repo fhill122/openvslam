@@ -5,8 +5,10 @@
 #include "openvslam/camera/fisheye.h"
 #include "openvslam/camera/equirectangular.h"
 #include "openvslam/camera/radial_division.h"
+#include "openvslam/camera/cube_space.h"
 #include "openvslam/optimize/internal/se3/perspective_pose_opt_edge.h"
 #include "openvslam/optimize/internal/se3/equirectangular_pose_opt_edge.h"
+#include "openvslam/optimize/internal/se3/g2o_cubemap_vertices_edges.h"
 
 #include <g2o/core/robust_kernel_impl.h>
 
@@ -27,7 +29,8 @@ public:
 
     pose_opt_edge_wrapper(T* shot, shot_vertex* shot_vtx, const Vec3_t& pos_w,
                           const unsigned int idx, const float obs_x, const float obs_y, const float obs_x_right,
-                          const float inv_sigma_sq, const float sqrt_chi_sq);
+                          const float inv_sigma_sq, const float sqrt_chi_sq,
+                          const camera::CubeSpace::Face face);
 
     virtual ~pose_opt_edge_wrapper() = default;
 
@@ -52,7 +55,8 @@ public:
 template<typename T>
 inline pose_opt_edge_wrapper<T>::pose_opt_edge_wrapper(T* shot, shot_vertex* shot_vtx, const Vec3_t& pos_w,
                                                        const unsigned int idx, const float obs_x, const float obs_y, const float obs_x_right,
-                                                       const float inv_sigma_sq, const float sqrt_chi_sq)
+                                                       const float inv_sigma_sq, const float sqrt_chi_sq,
+                                                       const camera::CubeSpace::Face face)
     : camera_(shot->camera_), shot_(shot), idx_(idx), is_monocular_(obs_x_right < 0) {
     // 拘束条件を設定
     switch (camera_->model_type_) {
@@ -201,6 +205,24 @@ inline pose_opt_edge_wrapper<T>::pose_opt_edge_wrapper(T* shot, shot_vertex* sho
             }
             break;
         }
+        case camera::model_type_t::VirtualCube:{
+            auto c = static_cast<camera::CubeSpace*>(camera_);
+            // todo ivan. here we ignore stereo observation
+            auto edge = new g2o::EdgeSE3ProjectXYZMultiPinholeOnlyPose();
+
+            const Vec2_t obs{obs_x, obs_y};
+            edge->setMeasurementInFace(obs);
+            edge->setInformation(Mat22_t::Identity() * inv_sigma_sq);
+
+            edge->setCam(c);
+            edge->setFace(face);
+            edge->Xw = pos_w;
+
+            edge->setVertex(0, shot_vtx);
+
+            edge_ = edge;
+            break;
+        }
     }
 
     // loss functionを設定
@@ -258,6 +280,9 @@ inline bool pose_opt_edge_wrapper<T>::depth_is_positive() const {
             else {
                 return static_cast<stereo_perspective_pose_opt_edge*>(edge_)->stereo_perspective_pose_opt_edge::depth_is_positive();
             }
+        }
+        case camera::model_type_t::VirtualCube: {
+            AssertLog(false, "to implemented");
         }
     }
 

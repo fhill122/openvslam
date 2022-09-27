@@ -24,7 +24,8 @@ keyframe::keyframe(const frame& frm, map_database* map_db, bow_database* bow_db)
       // camera parameters
       camera_(frm.camera_), depth_thr_(frm.depth_thr_),
       // constant observations
-      num_keypts_(frm.num_keypts_), keypts_(frm.keypts_), undist_keypts_(frm.undist_keypts_), bearings_(frm.bearings_),
+      num_keypts_(frm.num_keypts_), keypts_(frm.keypts_), undist_keypts_(frm.undist_keypts_),
+      cube_keypts_(frm.cube_keypts_), bearings_(frm.bearings_),
       keypt_indices_in_cells_(frm.keypt_indices_in_cells_),
       stereo_x_right_(frm.stereo_x_right_), depths_(frm.depths_), descriptors_(frm.descriptors_.clone()),
       // BoW
@@ -69,6 +70,8 @@ keyframe::keyframe(const unsigned int id, const unsigned int src_frm_id, const d
     compute_bow();
     // set pose parameters (cam_pose_wc_, cam_center_) using cam_pose_cw_
     set_cam_pose(cam_pose_cw);
+
+    AssertLog(false, "not implemented");
 
     // The following process needs to take place:
     //   should set the pointers of landmarks_ using add_landmark()

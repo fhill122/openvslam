@@ -4,11 +4,13 @@ lib/
 dataset/
 vocab/
 .idea/
-cmake-build-debug/
-cmake-build-release/
+cmake-build-*/
 */.python-version
 *.user
 *~
+.DS_Store
+.vscode
+./data/
 
 # Prerequisites
 *.d
@@ -45,3 +47,4 @@ cmake-build-release/
 
 # vcpkg
 /3rd/vcpkg/
+/3rd/tinycolormap/

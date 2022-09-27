@@ -3,6 +3,7 @@
 
 #include "openvslam/type.h"
 #include "openvslam/data/frame.h"
+#include "openvslam/data/multi_frame.h"
 #include "openvslam/module/initializer.h"
 #include "openvslam/module/relocalizer.h"
 #include "openvslam/module/keyframe_inserter.h"
@@ -89,6 +90,10 @@ public:
     //! (Note: RGB and Depth images must be aligned)
     std::shared_ptr<Mat44_t> track_RGBD_image(const cv::Mat& img, const cv::Mat& depthmap, const double timestamp, const cv::Mat& mask = cv::Mat{});
 
+    //! Track multi cam
+    std::shared_ptr<Mat44_t> track_multi_images(const std::vector<cv::Mat> &imgs, const double timestamp,
+                                               const std::vector<cv::Mat> &masks = std::vector<cv::Mat>());
+
     //! Request to update the pose to a given one.
     //! Return failure in case if previous request was not finished yet.
     bool request_relocalize_by_pose(const Mat44_t& pose);
@@ -119,9 +124,12 @@ public:
     // configurations
 
     //! camera model
-    camera::base* camera_;
+    // camera::base* camera_;
+    camera::CameraRig* cam_rig_;
 
-    //! depth threshold (Ignore depths farther than true_depth_thr_ times the baseline.)
+    //! depth threshold (Ignore depths farther than true_depth_thr_ times the baseline.).
+    //! this is passed finally to keyframe to judge redundant obsearvation
+    // todo ivan. adapt multi cam
     double true_depth_thr_ = 40.0;
 
     //! depthmap factor (pixel_value / depthmap_factor = true_depth)
@@ -147,8 +155,10 @@ public:
 
     //! current frame and its image
     data::frame curr_frm_;
-    //! image of the current frame
+    data::MultiFrame curr_mfrm_;
+    //! image of the current frame. saved for visualization
     cv::Mat img_gray_;
+    std::vector<cv::Mat> imgs_gray_;
 
     //! elapsed microseconds for each tracking
     double elapsed_ms_ = 0.0;
@@ -159,6 +169,7 @@ protected:
 
     //! Main stream of the tracking module
     void track();
+    void mfTrack();
 
     //! Try to initialize with the current frame
     bool initialize();

@@ -4,7 +4,6 @@
 #include "openvslam/mapping_module.h"
 #include "openvslam/global_optimization_module.h"
 #include "openvslam/camera/base.h"
-#include "openvslam/data/camera_database.h"
 #include "openvslam/data/map_database.h"
 #include "openvslam/data/bow_database.h"
 #include "openvslam/data/bow_vocabulary.h"
@@ -21,7 +20,7 @@
 namespace openvslam {
 
 system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file_path)
-    : cfg_(cfg), camera_(cfg->camera_) {
+    : cfg_(cfg), cam_rig_(cfg->cam_rig_.get()) {
     spdlog::debug("CONSTRUCT: system");
 
     std::ostringstream message_stream;
@@ -72,7 +71,6 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
 #endif
 
     // database
-    cam_db_ = new data::camera_database(camera_);
     map_db_ = new data::map_database();
     auto bow_database_yaml_node = util::yaml_optional_ref(cfg->yaml_node_, "BowDatabase");
     int reject_by_graph_distance = bow_database_yaml_node["reject_by_graph_distance"].as<bool>(false);
@@ -88,7 +86,8 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
     // mapping module
     mapper_ = new mapping_module(cfg_->yaml_node_["Mapping"], map_db_);
     // global optimization module
-    global_optimizer_ = new global_optimization_module(map_db_, bow_db_, bow_vocab_, cfg_->yaml_node_, camera_->setup_type_ != camera::setup_type_t::Monocular);
+    global_optimizer_ = new global_optimization_module(map_db_, bow_db_, bow_vocab_, cfg_->yaml_node_,
+                                                       !cfg_->cam_rig_->isMono());
 
     // connect modules each other
     tracker_->set_mapping_module(mapper_);
@@ -115,8 +114,6 @@ system::~system() {
     bow_db_ = nullptr;
     delete map_db_;
     map_db_ = nullptr;
-    delete cam_db_;
-    cam_db_ = nullptr;
     delete bow_vocab_;
     bow_vocab_ = nullptr;
 
@@ -165,20 +162,6 @@ void system::save_keyframe_trajectory(const std::string& path, const std::string
     pause_other_threads();
     io::trajectory_io trajectory_io(map_db_);
     trajectory_io.save_keyframe_trajectory(path, format);
-    resume_other_threads();
-}
-
-void system::load_map_database(const std::string& path) const {
-    pause_other_threads();
-    io::map_database_io map_db_io(cam_db_, map_db_, bow_db_, bow_vocab_);
-    map_db_io.load_message_pack(path);
-    resume_other_threads();
-}
-
-void system::save_map_database(const std::string& path) const {
-    pause_other_threads();
-    io::map_database_io map_db_io(cam_db_, map_db_, bow_db_, bow_vocab_);
-    map_db_io.save_message_pack(path);
     resume_other_threads();
 }
 
@@ -243,7 +226,7 @@ void system::abort_loop_BA() {
 }
 
 std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask) {
-    assert(camera_->setup_type_ == camera::setup_type_t::Monocular);
+    assert(cam_rig_->cameras.size() == 1 && cam_rig_->cameras[0]->setup_type_ == camera::setup_type_t::Monocular);
 
     check_reset_request();
 
@@ -259,7 +242,7 @@ std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const 
 }
 
 std::shared_ptr<Mat44_t> system::feed_stereo_frame(const cv::Mat& left_img, const cv::Mat& right_img, const double timestamp, const cv::Mat& mask) {
-    assert(camera_->setup_type_ == camera::setup_type_t::Stereo);
+    assert(cam_rig_->cameras.size() == 1 && cam_rig_->cameras[0]->setup_type_ == camera::setup_type_t::Stereo);
 
     check_reset_request();
 
@@ -275,7 +258,7 @@ std::shared_ptr<Mat44_t> system::feed_stereo_frame(const cv::Mat& left_img, cons
 }
 
 std::shared_ptr<Mat44_t> system::feed_RGBD_frame(const cv::Mat& rgb_img, const cv::Mat& depthmap, const double timestamp, const cv::Mat& mask) {
-    assert(camera_->setup_type_ == camera::setup_type_t::RGBD);
+    assert(cam_rig_->cameras.size() == 1 && cam_rig_->cameras[0]->setup_type_ == camera::setup_type_t::RGBD);
 
     check_reset_request();
 

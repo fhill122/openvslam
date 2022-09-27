@@ -31,7 +31,7 @@ public:
     initializer() = delete;
 
     //! Constructor
-    initializer(const camera::setup_type_t setup_type,
+    initializer(bool is_mono,
                 data::map_database* map_db, data::bow_database* bow_db,
                 const YAML::Node& yaml_node);
 
@@ -58,7 +58,7 @@ public:
 
 private:
     //! camera setup type
-    const camera::setup_type_t setup_type_;
+    const bool is_mono_;
     //! map database
     data::map_database* map_db_ = nullptr;
     //! BoW database

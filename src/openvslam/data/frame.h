@@ -3,6 +3,7 @@
 
 #include "openvslam/type.h"
 #include "openvslam/camera/base.h"
+#include "openvslam/camera/cube_space.h"
 #include "openvslam/util/converter.h"
 #include "openvslam/data/bow_vocabulary.h"
 
@@ -78,22 +79,6 @@ public:
           const cv::Mat& mask = cv::Mat{});
 
     /**
-     * Constructor for RGBD frame
-     * @param img_gray
-     * @param img_depth
-     * @param timestamp
-     * @param extractor
-     * @param bow_vocab
-     * @param camera
-     * @param depth_thr
-     * @param mask
-     */
-    frame(const cv::Mat& img_gray, const cv::Mat& img_depth, const double timestamp,
-          feature::orb_extractor* extractor, bow_vocabulary* bow_vocab,
-          camera::base* camera, const float depth_thr,
-          const cv::Mat& mask = cv::Mat{});
-
-    /**
      * Set camera pose and refresh rotation and translation
      * @param cam_pose_cw
      */
@@ -115,10 +100,6 @@ public:
      */
     Mat44_t get_cam_pose_inv() const;
 
-    /**
-     * Update rotation and translation using cam_pose_cw_
-     */
-    void update_pose_params();
 
     /**
      * Get camera center
@@ -201,6 +182,8 @@ public:
     std::vector<cv::KeyPoint> keypts_right_;
     //! undistorted keypoints of monocular or stereo left image
     std::vector<cv::KeyPoint> undist_keypts_;
+    //! if using cube space
+    std::vector<camera::CubeSpace::CubePoint> cube_keypts_;
     //! bearing vectors
     eigen_alloc_vector<Vec3_t> bearings_;
 
@@ -268,12 +251,6 @@ private:
      * @param img_side
      */
     void extract_orb(const cv::Mat& img, const cv::Mat& mask, const image_side& img_side = image_side::Left);
-
-    /**
-     * Compute disparities from depth information in depthmap
-     * @param right_img_depth
-     */
-    void compute_stereo_from_depth(const cv::Mat& right_img_depth);
 
     //! Camera pose
     //! rotation: world -> camera

@@ -33,6 +33,9 @@ setup_type_t base::load_setup_type(const YAML::Node& yaml_node) {
     else if (setup_type_str == "RGBD") {
         return camera::setup_type_t::RGBD;
     }
+    else if (setup_type_str == "multi_cam"){
+        return camera::setup_type_t::MultiCam;
+    }
 
     throw std::runtime_error("Invalid setup type: " + setup_type_str);
 }
@@ -58,6 +61,9 @@ model_type_t base::load_model_type(const YAML::Node& yaml_node) {
     }
     else if (model_type_str == "radial_division") {
         return camera::model_type_t::RadialDivision;
+    }
+    else if (model_type_str == "virtual_cube") {
+        return camera::model_type_t::VirtualCube;
     }
     throw std::runtime_error("Invalid camera model: " + model_type_str);
 }

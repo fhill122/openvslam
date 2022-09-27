@@ -2,6 +2,7 @@
 #define OPENVSLAM_CONFIG_H
 
 #include "openvslam/camera/base.h"
+#include "openvslam/camera/camera_rig.h"
 #include "openvslam/feature/orb_params.h"
 
 #include <yaml-cpp/yaml.h>
@@ -26,7 +27,11 @@ public:
     const YAML::Node yaml_node_;
 
     //! Camera model
-    camera::base* camera_ = nullptr;
+    // camera::base* camera_ = nullptr;
+    std::unique_ptr<camera::CameraRig> cam_rig_ = nullptr;
+
+    static camera::base* CamFromYaml(const YAML::Node& base_node);
+    static std::unique_ptr<camera::CameraRig> CamRigFromYaml(const YAML::Node& base_node);
 };
 
 } // namespace openvslam

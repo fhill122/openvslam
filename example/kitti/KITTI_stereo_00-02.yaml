@@ -34,6 +34,7 @@ Camera:
 Tracking:
   max_num_keypoints: 2000
   ini_max_num_keypoints: 4000
+  #  depth threshold (Ignore depths farther than true_depth_thr_ times the baseline.)
   depth_threshold: 40
 
 #================#

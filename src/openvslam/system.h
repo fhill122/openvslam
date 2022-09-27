@@ -3,6 +3,7 @@
 
 #include "openvslam/type.h"
 #include "openvslam/data/bow_vocabulary_fwd.h"
+#include "openvslam/camera/camera_rig.h"
 
 #include <string>
 #include <thread>
@@ -60,12 +61,6 @@ public:
 
     //! Save the keyframe trajectory in the specified format
     void save_keyframe_trajectory(const std::string& path, const std::string& format) const;
-
-    //! Load the map database from the MessagePack file
-    void load_map_database(const std::string& path) const;
-
-    //! Save the map database to the MessagePack file
-    void save_map_database(const std::string& path) const;
 
     //! Get the map publisher
     const std::shared_ptr<publish::map_publisher> get_map_publisher() const;
@@ -165,14 +160,12 @@ private:
 
     //! config
     const std::shared_ptr<config> cfg_;
-    //! camera model
-    camera::base* camera_ = nullptr;
-
-    //! camera database
-    data::camera_database* cam_db_ = nullptr;
 
     //! map database
     data::map_database* map_db_ = nullptr;
+
+    //! camera rig
+    camera::CameraRig *cam_rig_ = nullptr;
 
     //! BoW vocabulary
     data::bow_vocabulary* bow_vocab_ = nullptr;

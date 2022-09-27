@@ -134,7 +134,8 @@ void mono_tracking(const std::shared_ptr<openvslam::config>& cfg,
 
     if (!map_db_path.empty()) {
         // output the map database
-        SLAM.save_map_database(map_db_path);
+        // SLAM.save_map_database(map_db_path);
+        CV_Assert(false && "not implemented");
     }
 
     std::sort(track_times.begin(), track_times.end());
@@ -248,7 +249,8 @@ void stereo_tracking(const std::shared_ptr<openvslam::config>& cfg,
 
     if (!map_db_path.empty()) {
         // output the map database
-        SLAM.save_map_database(map_db_path);
+        CV_Assert(false && "not implemented");
+        // SLAM.save_map_database(map_db_path);
     }
 
     std::sort(track_times.begin(), track_times.end());
@@ -321,19 +323,17 @@ int main(int argc, char* argv[]) {
 #endif
 
     // run tracking
-    if (cfg->camera_->setup_type_ == openvslam::camera::setup_type_t::Monocular) {
+    if (cfg->cam_rig_->isMono()) {
         mono_tracking(cfg, vocab_file_path->value(), data_dir_path->value(),
                       frame_skip->value(), no_sleep->is_set(), auto_term->is_set(),
                       eval_log->is_set(), map_db_path->value());
     }
-    else if (cfg->camera_->setup_type_ == openvslam::camera::setup_type_t::Stereo) {
+    else{
         stereo_tracking(cfg, vocab_file_path->value(), data_dir_path->value(),
                         frame_skip->value(), no_sleep->is_set(), auto_term->is_set(),
                         eval_log->is_set(), map_db_path->value());
     }
-    else {
-        throw std::runtime_error("Invalid setup type: " + cfg->camera_->get_setup_type_string());
-    }
+
 
 #ifdef USE_GOOGLE_PERFTOOLS
     ProfilerStop();

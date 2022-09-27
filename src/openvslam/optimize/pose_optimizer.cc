@@ -7,6 +7,7 @@
 #include <vector>
 #include <mutex>
 
+#include <spdlog/spdlog.h>
 #include <Eigen/StdVector>
 #include <g2o/core/solver.h>
 #include <g2o/core/block_solver.h>
@@ -78,11 +79,21 @@ unsigned int pose_optimizer::optimize(data::frame& frm) const {
         const auto sqrt_chi_sq = (frm.camera_->setup_type_ == camera::setup_type_t::Monocular)
                                      ? sqrt_chi_sq_2D
                                      : sqrt_chi_sq_3D;
-        auto pose_opt_edge_wrap = pose_opt_edge_wrapper(&frm, frm_vtx, lm->get_pos_in_world(),
-                                                        idx, undist_keypt.pt.x, undist_keypt.pt.y, x_right,
-                                                        inv_sigma_sq, sqrt_chi_sq);
-        pose_opt_edge_wraps.push_back(pose_opt_edge_wrap);
-        optimizer.addEdge(pose_opt_edge_wrap.edge_);
+
+        if (frm.camera_->model_type_==camera::model_type_t::VirtualCube) {
+            const auto& cube_point = frm.cube_keypts_.at(idx);
+            auto pose_opt_edge_wrap = pose_opt_edge_wrapper(&frm, frm_vtx, lm->get_pos_in_world(),
+                                                        idx, cube_point.u, cube_point.v, x_right,
+                                                        inv_sigma_sq, sqrt_chi_sq, cube_point.face);
+            pose_opt_edge_wraps.push_back(pose_opt_edge_wrap);
+            optimizer.addEdge(pose_opt_edge_wrap.edge_);
+        } else{
+            auto pose_opt_edge_wrap = pose_opt_edge_wrapper(&frm, frm_vtx, lm->get_pos_in_world(),
+                                                            idx, undist_keypt.pt.x, undist_keypt.pt.y, x_right,
+                                                            inv_sigma_sq, sqrt_chi_sq, camera::CubeSpace::Face::UNKNOWN_FACE);
+            pose_opt_edge_wraps.push_back(pose_opt_edge_wrap);
+            optimizer.addEdge(pose_opt_edge_wrap.edge_);
+        }
     }
 
     if (num_init_obs < 5) {

@@ -19,7 +19,15 @@ target_sources(${PROJECT_NAME}
                ${CMAKE_CURRENT_SOURCE_DIR}/camera_database.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/map_database.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/bow_database.cc
-               ${CMAKE_CURRENT_SOURCE_DIR}/frame_statistics.cc)
+               ${CMAKE_CURRENT_SOURCE_DIR}/frame_statistics.cc
+
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/multi_frame.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/multi_keyframe.h
+
+
+
+)
 
 # Install headers
 file(GLOB HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/*.h")

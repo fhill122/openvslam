@@ -78,29 +78,33 @@ namespace openvslam {
 
 tracking_module::tracking_module(const std::shared_ptr<config>& cfg, system* system, data::map_database* map_db,
                                  data::bow_vocabulary* bow_vocab, data::bow_database* bow_db)
-    : camera_(cfg->camera_), true_depth_thr_(get_true_depth_thr(camera_, util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
-      depthmap_factor_(get_depthmap_factor(camera_, util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
+    : cam_rig_(cfg->cam_rig_.get()),
+      // todo ivan. fix using cam_rig_->cameras[0]
+      true_depth_thr_(get_true_depth_thr(cam_rig_->cameras[0].get(), util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
+      depthmap_factor_(get_depthmap_factor(cam_rig_->cameras[0].get(), util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
+
       reloc_distance_threshold_(get_reloc_distance_threshold(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
       reloc_angle_threshold_(get_reloc_angle_threshold(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
       enable_auto_relocalization_(get_enable_auto_relocalization(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
       use_robust_matcher_for_relocalization_request_(get_use_robust_matcher_for_relocalization_request(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
       system_(system), map_db_(map_db), bow_vocab_(bow_vocab), bow_db_(bow_db),
-      initializer_(cfg->camera_->setup_type_, map_db, bow_db, util::yaml_optional_ref(cfg->yaml_node_, "Initializer")),
-      frame_tracker_(camera_, 10),
+      initializer_(cfg->cam_rig_->isMono(), map_db, bow_db, util::yaml_optional_ref(cfg->yaml_node_, "Initializer")),
+      frame_tracker_(10),
       relocalizer_(bow_db_, util::yaml_optional_ref(cfg->yaml_node_, "Relocalizer")),
       pose_optimizer_(),
-      keyfrm_inserter_(cfg->camera_->setup_type_, true_depth_thr_, map_db, bow_db, 0, cfg->camera_->fps_) {
+      keyfrm_inserter_(cfg->cam_rig_->isMono(), true_depth_thr_, map_db, bow_db, 0, cfg->cam_rig_->cameras[0]->fps_) {
     spdlog::debug("CONSTRUCT: tracking_module");
 
     feature::orb_params orb_params = get_orb_params(util::yaml_optional_ref(cfg->yaml_node_, "Feature"));
     const auto tracking_params = util::yaml_optional_ref(cfg->yaml_node_, "Tracking");
     const auto max_num_keypoints = tracking_params["max_num_keypoints"].as<unsigned int>(2000);
     extractor_left_ = new feature::orb_extractor(max_num_keypoints, orb_params);
-    if (camera_->setup_type_ == camera::setup_type_t::Monocular) {
+    if (cam_rig_->isMono()) {
         const auto ini_max_num_keypoints = tracking_params["ini_max_num_keypoints"].as<unsigned int>(2 * extractor_left_->get_max_num_keypoints());
         ini_extractor_left_ = new feature::orb_extractor(ini_max_num_keypoints, orb_params);
     }
-    if (camera_->setup_type_ == camera::setup_type_t::Stereo) {
+    // todo ivan. fix this multi cam
+    if (cam_rig_->cameras.size()==2) {
         extractor_right_ = new feature::orb_extractor(max_num_keypoints, orb_params);
     }
 }
@@ -148,14 +152,15 @@ std::shared_ptr<Mat44_t> tracking_module::track_monocular_image(const cv::Mat& i
 
     // color conversion
     img_gray_ = img;
-    util::convert_to_grayscale(img_gray_, camera_->color_order_);
+    util::convert_to_grayscale(img_gray_, cam_rig_->cameras[0]->color_order_);
 
     // create current frame object
     if (tracking_state_ == tracker_state_t::NotInitialized || tracking_state_ == tracker_state_t::Initializing) {
-        curr_frm_ = data::frame(img_gray_, timestamp, ini_extractor_left_, bow_vocab_, camera_, true_depth_thr_, mask);
+        curr_frm_ = data::frame(img_gray_, timestamp, ini_extractor_left_, bow_vocab_, cam_rig_->cameras[0].get(), true_depth_thr_, mask);
     }
     else {
-        curr_frm_ = data::frame(img_gray_, timestamp, extractor_left_, bow_vocab_, camera_, true_depth_thr_, mask);
+        curr_frm_ = data::frame(img_gray_, timestamp, extractor_left_, bow_vocab_,
+                                cam_rig_->cameras[0].get(), true_depth_thr_, mask);
     }
 
     track();
@@ -176,11 +181,13 @@ std::shared_ptr<Mat44_t> tracking_module::track_stereo_image(const cv::Mat& left
     // color conversion
     img_gray_ = left_img_rect;
     cv::Mat right_img_gray = right_img_rect;
-    util::convert_to_grayscale(img_gray_, camera_->color_order_);
-    util::convert_to_grayscale(right_img_gray, camera_->color_order_);
+    util::convert_to_grayscale(img_gray_, cam_rig_->cameras[0]->color_order_);
+    util::convert_to_grayscale(right_img_gray, cam_rig_->cameras[1]->color_order_);
 
     // create current frame object
-    curr_frm_ = data::frame(img_gray_, right_img_gray, timestamp, extractor_left_, extractor_right_, bow_vocab_, camera_, true_depth_thr_, mask);
+    // todo ivan. doing here. pass rig
+    curr_frm_ = data::frame(img_gray_, right_img_gray, timestamp, extractor_left_, extractor_right_, bow_vocab_,
+                            cam_rig_->cameras[0].get(), true_depth_thr_, mask);
 
     track();
 
@@ -195,27 +202,57 @@ std::shared_ptr<Mat44_t> tracking_module::track_stereo_image(const cv::Mat& left
 }
 
 std::shared_ptr<Mat44_t> tracking_module::track_RGBD_image(const cv::Mat& img, const cv::Mat& depthmap, const double timestamp, const cv::Mat& mask) {
-    const auto start = std::chrono::system_clock::now();
+    AssertLog(false, "disabled");
+    return nullptr;
 
-    // color and depth scale conversion
-    img_gray_ = img;
-    cv::Mat img_depth = depthmap;
-    util::convert_to_grayscale(img_gray_, camera_->color_order_);
-    util::convert_to_true_depth(img_depth, depthmap_factor_);
+    // const auto start = std::chrono::system_clock::now();
+    //
+    // // color and depth scale conversion
+    // img_gray_ = img;
+    // cv::Mat img_depth = depthmap;
+    // util::convert_to_grayscale(img_gray_, camera_->color_order_);
+    // util::convert_to_true_depth(img_depth, depthmap_factor_);
+    //
+    // // create current frame object
+    // curr_frm_ = data::frame(img_gray_, img_depth, timestamp, extractor_left_, bow_vocab_, camera_, true_depth_thr_, mask);
+    //
+    // track();
+    //
+    // const auto end = std::chrono::system_clock::now();
+    // elapsed_ms_ = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    //
+    // std::shared_ptr<Mat44_t> cam_pose_wc = nullptr;
+    // if (curr_frm_.cam_pose_cw_is_valid_) {
+    //     cam_pose_wc = std::allocate_shared<Mat44_t>(Eigen::aligned_allocator<Mat44_t>(), curr_frm_.get_cam_pose_inv());
+    // }
+    // return cam_pose_wc;
+}
 
-    // create current frame object
-    curr_frm_ = data::frame(img_gray_, img_depth, timestamp, extractor_left_, bow_vocab_, camera_, true_depth_thr_, mask);
 
-    track();
+std::shared_ptr<Mat44_t> tracking_module::track_multi_images(const vector<cv::Mat>& imgs, const double timestamp, const vector<cv::Mat>& masks) {
+    AssertLog(imgs.size()<=2, "limit to two for now");
 
-    const auto end = std::chrono::system_clock::now();
-    elapsed_ms_ = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    // if (imgs.size()==1){
+    //     return track_monocular_image(imgs[0], timestamp, masks.empty()? cv::Mat(): masks[0]);
+    // } else{
+    //     return track_stereo_image(imgs[0], imgs[1], timestamp, masks.empty()? cv::Mat(): masks[0]);
+    // }
 
-    std::shared_ptr<Mat44_t> cam_pose_wc = nullptr;
-    if (curr_frm_.cam_pose_cw_is_valid_) {
-        cam_pose_wc = std::allocate_shared<Mat44_t>(Eigen::aligned_allocator<Mat44_t>(), curr_frm_.get_cam_pose_inv());
+    // todo ivan. doing here.
+    // static_assert(false && "doing here");
+
+    vector<cv::Mat> empty_masks;
+    if (masks.empty()) empty_masks.resize(imgs.size());
+    const vector<cv::Mat> &final_masks = masks.empty()? empty_masks : masks;
+
+    imgs_gray_ = imgs;
+    curr_mfrm_ = data::MultiFrame(cam_rig_);
+
+    for (int i = 0; i < imgs.size(); ++i) {
+        util::convert_to_grayscale(imgs_gray_[i], cam_rig_->cameras[i]->color_order_);
+        curr_mfrm_.frames.push_back(data::frame(imgs_gray_[i], timestamp, extractor_left_, bow_vocab_,
+                                                cam_rig_->cameras[i].get(), true_depth_thr_, final_masks[i]));
     }
-    return cam_pose_wc;
 }
 
 bool tracking_module::request_relocalize_by_pose(const Mat44_t& pose) {
@@ -277,6 +314,46 @@ void tracking_module::reset() {
     last_reloc_frm_id_ = 0;
 
     tracking_state_ = tracker_state_t::NotInitialized;
+}
+
+void tracking_module::mfTrack() {
+    if (tracking_state_ == tracker_state_t::NotInitialized) {
+        tracking_state_ = tracker_state_t::Initializing;
+    }
+
+    last_tracking_state_ = tracking_state_;
+
+    // check if pause is requested
+    check_and_execute_pause();
+    while (is_paused()) {
+        std::this_thread::sleep_for(std::chrono::microseconds(5000));
+    }
+
+    // LOCK the map database
+    std::lock_guard<std::mutex> lock(data::map_database::mtx_database_);
+
+    if (tracking_state_ == tracker_state_t::Initializing) {
+        if (!initialize()) {
+            return;
+        }
+
+        // update the reference keyframe, local keyframes, and local landmarks
+        update_local_map();
+
+        // pass all of the keyframes to the mapping module
+        const auto keyfrms = map_db_->get_all_keyframes();
+        for (const auto& keyfrm : keyfrms) {
+            mapper_->queue_keyframe(keyfrm);
+        }
+
+        // state transition to Tracking mode
+        tracking_state_ = tracker_state_t::Tracking;
+    }
+    else{
+
+    }
+
+
 }
 
 void tracking_module::track() {
@@ -344,7 +421,7 @@ void tracking_module::track() {
         // if tracking is failed within 5.0 sec after initialization, reset the system
         constexpr float init_retry_thr = 5.0;
         if (tracking_state_ == tracker_state_t::Lost
-            && curr_frm_.id_ - initializer_.get_initial_frame_id() < camera_->fps_ * init_retry_thr) {
+            && curr_frm_.id_ - initializer_.get_initial_frame_id() < cam_rig_->cameras[0]->fps_* init_retry_thr) {
             spdlog::info("tracking lost within {} sec after initialization", init_retry_thr);
             system_->request_reset();
             return;
@@ -537,7 +614,7 @@ bool tracking_module::optimize_current_frame_with_local_map() {
     constexpr unsigned int num_tracked_lms_thr = 20;
 
     // if recently relocalized, use the more strict threshold
-    if (curr_frm_.id_ < last_reloc_frm_id_ + camera_->fps_ && num_tracked_lms_ < 2 * num_tracked_lms_thr) {
+    if (curr_frm_.id_ < last_reloc_frm_id_ + cam_rig_->cameras[0]->fps_ && num_tracked_lms_ < 2 * num_tracked_lms_thr) {
         spdlog::debug("local map tracking failed: {} matches < {}", num_tracked_lms_, 2 * num_tracked_lms_thr);
         return false;
     }
@@ -644,10 +721,7 @@ void tracking_module::search_local_landmarks() {
     // acquire more 2D-3D matches by projecting the local landmarks to the current frame
     match::projection projection_matcher(0.8);
     const float margin = (curr_frm_.id_ < last_reloc_frm_id_ + 2)
-                             ? 20.0
-                             : ((camera_->setup_type_ == camera::setup_type_t::RGBD)
-                                    ? 10.0
-                                    : 5.0);
+                             ? 20.0 : 10;
     projection_matcher.match_frame_and_landmarks(curr_frm_, local_landmarks_, margin);
 }
 
@@ -658,7 +732,7 @@ bool tracking_module::new_keyframe_is_needed() const {
 
     // cannnot insert the new keyframe in a second after relocalization
     const auto num_keyfrms = map_db_->get_num_keyframes();
-    if (camera_->fps_ < num_keyfrms && curr_frm_.id_ < last_reloc_frm_id_ + camera_->fps_) {
+    if (cam_rig_->cameras[0]->fps_ < num_keyfrms && curr_frm_.id_ < last_reloc_frm_id_ + cam_rig_->cameras[0]->fps_) {
         return false;
     }
 

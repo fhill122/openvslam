@@ -21,7 +21,7 @@ namespace module {
 
 class frame_tracker {
 public:
-    explicit frame_tracker(camera::base* camera, const unsigned int num_matches_thr = 20);
+    explicit frame_tracker(const unsigned int num_matches_thr = 20);
 
     bool motion_based_track(data::frame& curr_frm, const data::frame& last_frm, const Mat44_t& velocity) const;
 
@@ -32,7 +32,6 @@ public:
 private:
     unsigned int discard_outliers(data::frame& curr_frm) const;
 
-    const camera::base* camera_;
     const unsigned int num_matches_thr_;
 
     const optimize::pose_optimizer pose_optimizer_;

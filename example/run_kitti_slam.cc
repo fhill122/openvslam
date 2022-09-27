@@ -198,7 +198,7 @@ void stereo_tracking(const std::shared_ptr<openvslam::config>& cfg,
                 break;
             }
         }
-        
+
         // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER
         if (auto_term) {

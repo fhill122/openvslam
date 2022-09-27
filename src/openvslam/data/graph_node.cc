@@ -342,27 +342,6 @@ bool graph_node::has_spanning_child(const std::shared_ptr<keyframe>& keyfrm) con
     return static_cast<bool>(spanning_children_.count(keyfrm));
 }
 
-void graph_node::add_loop_edge(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
-    loop_edges_.insert(keyfrm);
-    // cannot erase loop edges
-    owner_keyfrm_.lock()->set_not_to_be_erased();
-}
-
-std::set<std::shared_ptr<keyframe>> graph_node::get_loop_edges() const {
-    std::lock_guard<std::mutex> lock(mtx_);
-    std::set<std::shared_ptr<keyframe>> locked_loop_edges;
-    for (const auto& keyfrm : loop_edges_) {
-        locked_loop_edges.insert(keyfrm.lock());
-    }
-    return locked_loop_edges;
-}
-
-bool graph_node::has_loop_edge() const {
-    std::lock_guard<std::mutex> lock(mtx_);
-    return !loop_edges_.empty();
-}
-
 template<typename T, typename U>
 std::vector<std::shared_ptr<keyframe>> graph_node::extract_intersection(const T& keyfrms_1, const U& keyfrms_2) {
     std::vector<std::shared_ptr<keyframe>> intersection;

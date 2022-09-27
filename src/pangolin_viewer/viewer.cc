@@ -253,19 +253,6 @@ void viewer::draw_keyframes() {
                 const openvslam::Vec3_t cam_center_2 = spanning_parent->get_cam_center();
                 draw_edge(cam_center_1, cam_center_2);
             }
-
-            // loop edges
-            const auto loop_edges = keyfrm->graph_node_->get_loop_edges();
-            for (const auto loop_edge : loop_edges) {
-                if (!loop_edge) {
-                    continue;
-                }
-                if (loop_edge->id_ < keyfrm->id_) {
-                    continue;
-                }
-                const openvslam::Vec3_t cam_center_2 = loop_edge->get_cam_center();
-                draw_edge(cam_center_1, cam_center_2);
-            }
         }
 
         glEnd();

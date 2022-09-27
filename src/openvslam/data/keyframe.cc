@@ -7,7 +7,6 @@
 #include "openvslam/data/keyframe.h"
 #include "openvslam/data/landmark.h"
 #include "openvslam/data/map_database.h"
-#include "openvslam/data/bow_database.h"
 #include "openvslam/feature/orb_params.h"
 #include "openvslam/util/converter.h"
 
@@ -18,7 +17,7 @@ namespace data {
 
 std::atomic<unsigned int> keyframe::next_id_{0};
 
-keyframe::keyframe(const frame& frm, map_database* map_db, bow_database* bow_db)
+keyframe::keyframe(const frame& frm, map_database* map_db)
     : // meta information
       id_(next_id_++), src_frm_id_(frm.id_), timestamp_(frm.timestamp_),
       // camera parameters
@@ -37,7 +36,7 @@ keyframe::keyframe(const frame& frm, map_database* map_db, bow_database* bow_db)
       // observations
       landmarks_(frm.landmarks_),
       // databases
-      map_db_(map_db), bow_db_(bow_db), bow_vocab_(frm.bow_vocab_) {
+      map_db_(map_db), bow_vocab_(frm.bow_vocab_) {
     // set pose parameters (cam_pose_wc_, cam_center_) using frm.cam_pose_cw_
     set_cam_pose(frm.cam_pose_cw_);
 }
@@ -48,7 +47,7 @@ keyframe::keyframe(const unsigned int id, const unsigned int src_frm_id, const d
                    const std::vector<cv::KeyPoint>& undist_keypts, const eigen_alloc_vector<Vec3_t>& bearings,
                    const std::vector<float>& stereo_x_right, const std::vector<float>& depths, const cv::Mat& descriptors,
                    const unsigned int num_scale_levels, const float scale_factor,
-                   bow_vocabulary* bow_vocab, bow_database* bow_db, map_database* map_db)
+                   bow_vocabulary* bow_vocab, map_database* map_db)
     : // meta information
       id_(id), src_frm_id_(src_frm_id), timestamp_(timestamp),
       // camera parameters
@@ -65,7 +64,7 @@ keyframe::keyframe(const unsigned int id, const unsigned int src_frm_id, const d
       // others
       landmarks_(std::vector<std::shared_ptr<landmark>>(num_keypts, nullptr)),
       // databases
-      map_db_(map_db), bow_db_(bow_db), bow_vocab_(bow_vocab) {
+      map_db_(map_db), bow_vocab_(bow_vocab) {
     // compute BoW (bow_vec_, bow_feat_vec_) using descriptors_
     compute_bow();
     // set pose parameters (cam_pose_wc_, cam_center_) using cam_pose_cw_
@@ -83,8 +82,8 @@ keyframe::keyframe(const unsigned int id, const unsigned int src_frm_id, const d
 
 keyframe::~keyframe() {}
 
-std::shared_ptr<keyframe> keyframe::make_keyframe(const frame& frm, map_database* map_db, bow_database* bow_db) {
-    auto ptr = std::allocate_shared<keyframe>(Eigen::aligned_allocator<keyframe>(), frm, map_db, bow_db);
+std::shared_ptr<keyframe> keyframe::make_keyframe(const frame& frm, map_database* map_db) {
+    auto ptr = std::allocate_shared<keyframe>(Eigen::aligned_allocator<keyframe>(), frm, map_db);
     // covisibility graph node (connections is not assigned yet)
     ptr->graph_node_ = openvslam::make_unique<graph_node>(ptr, true);
     return ptr;
@@ -97,7 +96,7 @@ std::shared_ptr<keyframe> keyframe::make_keyframe(
     const std::vector<cv::KeyPoint>& undist_keypts, const eigen_alloc_vector<Vec3_t>& bearings,
     const std::vector<float>& stereo_x_right, const std::vector<float>& depths, const cv::Mat& descriptors,
     const unsigned int num_scale_levels, const float scale_factor,
-    bow_vocabulary* bow_vocab, bow_database* bow_db, map_database* map_db) {
+    bow_vocabulary* bow_vocab, map_database* map_db) {
     auto ptr = std::allocate_shared<keyframe>(
         Eigen::aligned_allocator<keyframe>(),
         id, src_frm_id, timestamp,
@@ -106,62 +105,12 @@ std::shared_ptr<keyframe> keyframe::make_keyframe(
         undist_keypts, bearings,
         stereo_x_right, depths, descriptors,
         num_scale_levels, scale_factor,
-        bow_vocab, bow_db, map_db);
+        bow_vocab, map_db);
     // covisibility graph node (connections is not assigned yet)
     ptr->graph_node_ = openvslam::make_unique<graph_node>(ptr, false);
     return ptr;
 }
 
-nlohmann::json keyframe::to_json() const {
-    // extract landmark IDs
-    std::vector<int> landmark_ids(landmarks_.size(), -1);
-    for (unsigned int i = 0; i < landmark_ids.size(); ++i) {
-        if (landmarks_.at(i) && !landmarks_.at(i)->will_be_erased()) {
-            landmark_ids.at(i) = landmarks_.at(i)->id_;
-        }
-    }
-
-    // extract spanning tree parent
-    const auto& spanning_parent = graph_node_->get_spanning_parent();
-
-    // extract spanning tree children
-    const auto spanning_children = graph_node_->get_spanning_children();
-    std::vector<int> spanning_child_ids;
-    spanning_child_ids.reserve(spanning_children.size());
-    for (const auto& spanning_child : spanning_children) {
-        spanning_child_ids.push_back(spanning_child->id_);
-    }
-
-    // extract loop edges
-    const auto loop_edges = graph_node_->get_loop_edges();
-    std::vector<int> loop_edge_ids;
-    for (const auto& loop_edge : loop_edges) {
-        loop_edge_ids.push_back(loop_edge->id_);
-    }
-
-    return {{"src_frm_id", src_frm_id_},
-            {"ts", timestamp_},
-            {"cam", camera_->name_},
-            {"depth_thr", depth_thr_},
-            // camera pose
-            {"rot_cw", convert_rotation_to_json(cam_pose_cw_.block<3, 3>(0, 0))},
-            {"trans_cw", convert_translation_to_json(cam_pose_cw_.block<3, 1>(0, 3))},
-            // features and observations
-            {"n_keypts", num_keypts_},
-            {"keypts", convert_keypoints_to_json(keypts_)},
-            {"undists", convert_undistorted_to_json(undist_keypts_)},
-            {"x_rights", stereo_x_right_},
-            {"depths", depths_},
-            {"descs", convert_descriptors_to_json(descriptors_)},
-            {"lm_ids", landmark_ids},
-            // orb scale information
-            {"n_scale_levels", num_scale_levels_},
-            {"scale_factor", scale_factor_},
-            // graph information
-            {"span_parent", spanning_parent ? spanning_parent->id_ : -1},
-            {"span_children", spanning_child_ids},
-            {"loop_edges", loop_edge_ids}};
-}
 
 void keyframe::set_cam_pose(const Mat44_t& cam_pose_cw) {
     std::lock_guard<std::mutex> lock(mtx_pose_);
@@ -409,11 +358,6 @@ void keyframe::set_not_to_be_erased() {
     cannot_be_erased_ = true;
 }
 
-void keyframe::set_to_be_erased() {
-    if (!graph_node_->has_loop_edge()) {
-        cannot_be_erased_ = false;
-    }
-}
 
 void keyframe::prepare_for_erasing() {
     // cannot erase the origin
@@ -456,7 +400,6 @@ void keyframe::prepare_for_erasing() {
     // 4. remove myself from the databased
 
     map_db_->erase_keyframe(shared_from_this());
-    bow_db_->erase_keyframe(shared_from_this());
 }
 
 bool keyframe::will_be_erased() {

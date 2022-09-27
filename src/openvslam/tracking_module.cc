@@ -5,7 +5,6 @@
 #include "openvslam/camera/base.h"
 #include "openvslam/data/landmark.h"
 #include "openvslam/data/map_database.h"
-#include "openvslam/data/bow_database.h"
 #include "openvslam/feature/orb_extractor.h"
 #include "openvslam/match/projection.h"
 #include "openvslam/module/local_map_updater.h"
@@ -53,40 +52,22 @@ double get_depthmap_factor(const camera::base* camera, const YAML::Node& yaml_no
     return depthmap_factor;
 }
 
-double get_reloc_distance_threshold(const YAML::Node& yaml_node) {
-    spdlog::debug("load maximum distance threshold where close keyframes could be found");
-    return yaml_node["reloc_distance_threshold"].as<double>(0.2);
-}
-
-double get_reloc_angle_threshold(const YAML::Node& yaml_node) {
-    spdlog::debug("load maximum angle threshold between given pose and close keyframes");
-    return yaml_node["reloc_angle_threshold"].as<double>(0.45);
-}
-
-double get_enable_auto_relocalization(const YAML::Node& yaml_node) {
-    return yaml_node["enable_auto_relocalization"].as<bool>(true);
-}
-
-double get_use_robust_matcher_for_relocalization_request(const YAML::Node& yaml_node) {
-    return yaml_node["use_robust_matcher_for_relocalization_request"].as<bool>(false);
-}
-
 } // unnamed namespace
 
 namespace openvslam {
 
 tracking_module::tracking_module(const std::shared_ptr<config>& cfg, system* system, data::map_database* map_db,
-                                 data::bow_vocabulary* bow_vocab, data::bow_database* bow_db)
+                                 data::bow_vocabulary* bow_vocab)
     : cam_rig_(cfg->cam_rig_.get()),
       // todo ivan. fix using cam_rig_->cameras[0]
       true_depth_thr_(get_true_depth_thr(cam_rig_->cameras[0].get(), util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
       depthmap_factor_(get_depthmap_factor(cam_rig_->cameras[0].get(), util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
 
-      system_(system), map_db_(map_db), bow_vocab_(bow_vocab), bow_db_(bow_db),
-      initializer_(cfg->cam_rig_->isMono(), map_db, bow_db, util::yaml_optional_ref(cfg->yaml_node_, "Initializer")),
+      system_(system), map_db_(map_db), bow_vocab_(bow_vocab),
+      initializer_(cfg->cam_rig_->isMono(), map_db, util::yaml_optional_ref(cfg->yaml_node_, "Initializer")),
       frame_tracker_(10),
       pose_optimizer_(),
-      keyfrm_inserter_(cfg->cam_rig_->isMono(), true_depth_thr_, map_db, bow_db, 0, cfg->cam_rig_->cameras[0]->fps_) {
+      keyfrm_inserter_(cfg->cam_rig_->isMono(), true_depth_thr_, map_db, 0, cfg->cam_rig_->cameras[0]->fps_) {
     spdlog::debug("CONSTRUCT: tracking_module");
 
     feature::orb_params orb_params = get_orb_params(util::yaml_optional_ref(cfg->yaml_node_, "Feature"));
@@ -256,7 +237,6 @@ void tracking_module::reset() {
 
     mapper_->request_reset();
 
-    bow_db_->clear();
     map_db_->clear();
 
     data::frame::next_id_ = 0;

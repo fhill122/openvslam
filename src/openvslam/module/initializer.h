@@ -13,7 +13,6 @@ class config;
 namespace data {
 class frame;
 class map_database;
-class bow_database;
 } // namespace data
 
 namespace module {
@@ -32,7 +31,7 @@ public:
 
     //! Constructor
     initializer(bool is_mono,
-                data::map_database* map_db, data::bow_database* bow_db,
+                data::map_database* map_db,
                 const YAML::Node& yaml_node);
 
     //! Destructor
@@ -61,8 +60,6 @@ private:
     const bool is_mono_;
     //! map database
     data::map_database* map_db_ = nullptr;
-    //! BoW database
-    data::bow_database* bow_db_ = nullptr;
     //! initializer status
     initializer_state_t state_ = initializer_state_t::NotReady;
 

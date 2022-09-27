@@ -1,6 +1,5 @@
 #include "openvslam/mapping_module.h"
 #include "openvslam/data/landmark.h"
-#include "openvslam/data/bow_database.h"
 #include "openvslam/data/map_database.h"
 #include "openvslam/module/keyframe_inserter.h"
 
@@ -8,10 +7,10 @@ namespace openvslam {
 namespace module {
 
 keyframe_inserter::keyframe_inserter(bool is_mono, const float true_depth_thr,
-                                     data::map_database* map_db, data::bow_database* bow_db,
+                                     data::map_database* map_db,
                                      const unsigned int min_num_frms, const unsigned int max_num_frms)
     : is_mono_(is_mono), true_depth_thr_(true_depth_thr),
-      map_db_(map_db), bow_db_(bow_db),
+      map_db_(map_db),
       min_num_frms_(min_num_frms), max_num_frms_(max_num_frms) {}
 
 void keyframe_inserter::set_mapping_module(mapping_module* mapper) {
@@ -89,7 +88,7 @@ std::shared_ptr<data::keyframe> keyframe_inserter::insert_new_keyframe(data::fra
 
     // note ivan. why the hell we need to call update_pose_params here??
     // curr_frm.update_pose_params();
-    auto keyfrm = data::keyframe::make_keyframe(curr_frm, map_db_, bow_db_);
+    auto keyfrm = data::keyframe::make_keyframe(curr_frm, map_db_);
 
     frm_id_of_last_keyfrm_ = curr_frm.id_;
 

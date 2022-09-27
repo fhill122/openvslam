@@ -23,7 +23,6 @@ class frame;
 class keyframe;
 class landmark;
 class camera_database;
-class bow_database;
 
 class map_database {
 public:

@@ -4,10 +4,8 @@
 #include "openvslam/mapping_module.h"
 #include "openvslam/camera/base.h"
 #include "openvslam/data/map_database.h"
-#include "openvslam/data/bow_database.h"
 #include "openvslam/data/bow_vocabulary.h"
 #include "openvslam/io/trajectory_io.h"
-#include "openvslam/io/map_database_io.h"
 #include "openvslam/publish/map_publisher.h"
 #include "openvslam/publish/frame_publisher.h"
 #include "openvslam/util/yaml.h"
@@ -74,14 +72,13 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
     auto bow_database_yaml_node = util::yaml_optional_ref(cfg->yaml_node_, "BowDatabase");
     int reject_by_graph_distance = bow_database_yaml_node["reject_by_graph_distance"].as<bool>(false);
     int loop_min_distance_on_graph = bow_database_yaml_node["loop_min_distance_on_graph"].as<int>(30);
-    bow_db_ = new data::bow_database(bow_vocab_, reject_by_graph_distance, loop_min_distance_on_graph);
 
     // frame and map publisher
     frame_publisher_ = std::shared_ptr<publish::frame_publisher>(new publish::frame_publisher(cfg_, map_db_));
     map_publisher_ = std::shared_ptr<publish::map_publisher>(new publish::map_publisher(cfg_, map_db_));
 
     // tracking module
-    tracker_ = new tracking_module(cfg_, this, map_db_, bow_vocab_, bow_db_);
+    tracker_ = new tracking_module(cfg_, this, map_db_, bow_vocab_);
     // mapping module
     mapper_ = new mapping_module(cfg_->yaml_node_["Mapping"], map_db_);
 
@@ -98,8 +95,6 @@ system::~system() {
     delete tracker_;
     tracker_ = nullptr;
 
-    delete bow_db_;
-    bow_db_ = nullptr;
     delete map_db_;
     map_db_ = nullptr;
     delete bow_vocab_;

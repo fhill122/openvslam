@@ -1,7 +1,7 @@
 #include "openvslam/camera/base.h"
 #include "openvslam/data/common.h"
 #include "openvslam/data/frame.h"
-#include "openvslam/data/keyframe.h"
+#include "openvslam/data/multi_keyframe.h"
 #include "openvslam/data/landmark.h"
 #include "openvslam/data/camera_database.h"
 #include "openvslam/data/map_database.h"

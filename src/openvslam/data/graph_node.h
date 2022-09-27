@@ -122,24 +122,6 @@ public:
      */
     bool has_spanning_child(const std::shared_ptr<keyframe>& keyfrm) const;
 
-    //-----------------------------------------
-    // loop edge
-
-    /**
-     * Add the loop edge
-     */
-    void add_loop_edge(const std::shared_ptr<keyframe>& keyfrm);
-
-    /**
-     * Get the loop edges
-     */
-    std::set<std::shared_ptr<keyframe>> get_loop_edges() const;
-
-    /**
-     * Whether this node has any loop edges or not
-     */
-    bool has_loop_edge() const;
-
 private:
     /**
      * Extract intersection from the two lists of keyframes

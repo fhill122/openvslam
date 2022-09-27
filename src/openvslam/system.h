@@ -146,9 +146,6 @@ private:
     //! BoW vocabulary
     data::bow_vocabulary* bow_vocab_ = nullptr;
 
-    //! BoW database
-    data::bow_database* bow_db_ = nullptr;
-
     //! tracker
     tracking_module* tracker_ = nullptr;
 

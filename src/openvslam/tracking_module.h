@@ -21,7 +21,6 @@ class mapping_module;
 
 namespace data {
 class map_database;
-class bow_database;
 } // namespace data
 
 namespace feature {
@@ -43,7 +42,7 @@ public:
 
     //! Constructor
     tracking_module(const std::shared_ptr<config>& cfg, system* system, data::map_database* map_db,
-                    data::bow_vocabulary* bow_vocab, data::bow_database* bow_db);
+                    data::bow_vocabulary* bow_vocab);
 
     //! Destructor
     ~tracking_module();
@@ -194,8 +193,6 @@ protected:
     // Bag of Words
     //! BoW vocabulary
     data::bow_vocabulary* bow_vocab_ = nullptr;
-    //! BoW database
-    data::bow_database* bow_db_ = nullptr;
 
     //! initializer
     module::initializer initializer_;

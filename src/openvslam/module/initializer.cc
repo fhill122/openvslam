@@ -14,9 +14,9 @@ namespace openvslam {
 namespace module {
 
 initializer::initializer(bool is_mono,
-                         data::map_database* map_db, data::bow_database* bow_db,
+                         data::map_database* map_db,
                          const YAML::Node& yaml_node)
-    : is_mono_(is_mono), map_db_(map_db), bow_db_(bow_db),
+    : is_mono_(is_mono), map_db_(map_db),
       num_ransac_iters_(yaml_node["num_ransac_iterations"].as<unsigned int>(100)),
       min_num_triangulated_(yaml_node["num_min_triangulated_pts"].as<unsigned int>(50)),
       parallax_deg_thr_(yaml_node["parallax_deg_threshold"].as<float>(1.0)),
@@ -180,8 +180,8 @@ bool initializer::create_map_for_monocular(data::frame& curr_frm) {
     }
 
     // create initial keyframes
-    auto init_keyfrm = data::keyframe::make_keyframe(init_frm_, map_db_, bow_db_);
-    auto curr_keyfrm = data::keyframe::make_keyframe(curr_frm, map_db_, bow_db_);
+    auto init_keyfrm = data::keyframe::make_keyframe(init_frm_, map_db_);
+    auto curr_keyfrm = data::keyframe::make_keyframe(curr_frm, map_db_);
 
     // compute BoW representations
     init_keyfrm->compute_bow();
@@ -282,7 +282,7 @@ bool initializer::create_map_for_stereo(data::frame& curr_frm) {
 
     // create an initial keyframe
     curr_frm.set_cam_pose(Mat44_t::Identity());
-    auto curr_keyfrm = data::keyframe::make_keyframe(curr_frm, map_db_, bow_db_);
+    auto curr_keyfrm = data::keyframe::make_keyframe(curr_frm, map_db_);
 
     // compute BoW representation
     curr_keyfrm->compute_bow();

@@ -2,7 +2,6 @@
 #define OPENVSLAM_DATA_MAP_DATABASE_H
 
 #include "openvslam/data/bow_vocabulary.h"
-#include "openvslam/data/frame_statistics.h"
 
 #include <mutex>
 #include <vector>
@@ -103,35 +102,6 @@ public:
     unsigned int get_max_keyframe_id() const;
 
     /**
-     * Update frame statistics
-     * @param frm
-     * @param is_lost
-     */
-    void update_frame_statistics(const data::frame& frm, const bool is_lost) {
-        std::lock_guard<std::mutex> lock(mtx_map_access_);
-        frm_stats_.update_frame_statistics(frm, is_lost);
-    }
-
-    /**
-     * Replace a keyframe which will be erased in frame statistics
-     * @param old_keyfrm
-     * @param new_keyfrm
-     */
-    void replace_reference_keyframe(const std::shared_ptr<data::keyframe>& old_keyfrm, const std::shared_ptr<data::keyframe>& new_keyfrm) {
-        std::lock_guard<std::mutex> lock(mtx_map_access_);
-        frm_stats_.replace_reference_keyframe(old_keyfrm, new_keyfrm);
-    }
-
-    /**
-     * Get frame statistics
-     * @return
-     */
-    frame_statistics get_frame_statistics() const {
-        std::lock_guard<std::mutex> lock(mtx_map_access_);
-        return frm_stats_;
-    }
-
-    /**
      * Clear the database
      */
     void clear();
@@ -161,11 +131,6 @@ private:
     //! max keyframe ID
     unsigned int max_keyfrm_id_ = 0;
 
-    //-----------------------------------------
-    // frame statistics for odometry evaluation
-
-    //! frame statistics
-    frame_statistics frm_stats_;
 };
 
 } // namespace data

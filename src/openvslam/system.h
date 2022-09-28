@@ -55,9 +55,6 @@ public:
     //-----------------------------------------
     // data I/O
 
-    //! Save the frame trajectory in the specified format
-    void save_frame_trajectory(const std::string& path, const std::string& format) const;
-
     //! Save the keyframe trajectory in the specified format
     void save_keyframe_trajectory(const std::string& path, const std::string& format) const;
 

@@ -348,9 +348,6 @@ void tracking_module::track() {
         // state transition
         tracking_state_ = succeeded ? tracker_state_t::Tracking : tracker_state_t::Lost;
 
-        // update the frame statistics
-        map_db_->update_frame_statistics(curr_frm_, tracking_state_ == tracker_state_t::Lost);
-
         // if tracking is failed within 5.0 sec after initialization, reset the system
         constexpr float init_retry_thr = 5.0;
         if (tracking_state_ == tracker_state_t::Lost

@@ -109,8 +109,6 @@ void map_database::clear() {
     local_landmarks_.clear();
     origin_keyfrm_ = nullptr;
 
-    frm_stats_.clear();
-
     spdlog::info("clear map database");
 }
 

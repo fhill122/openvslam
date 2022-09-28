@@ -129,13 +129,6 @@ void system::shutdown() {
     system_is_running_ = false;
 }
 
-void system::save_frame_trajectory(const std::string& path, const std::string& format) const {
-    pause_other_threads();
-    io::trajectory_io trajectory_io(map_db_);
-    trajectory_io.save_frame_trajectory(path, format);
-    resume_other_threads();
-}
-
 void system::save_keyframe_trajectory(const std::string& path, const std::string& format) const {
     pause_other_threads();
     io::trajectory_io trajectory_io(map_db_);

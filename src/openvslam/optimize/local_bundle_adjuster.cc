@@ -20,6 +20,7 @@
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/core/optimization_algorithm_levenberg.h>
 
+using namespace std;
 namespace openvslam {
 namespace optimize {
 
@@ -28,13 +29,16 @@ local_bundle_adjuster::local_bundle_adjuster(const unsigned int num_first_iter,
     : num_first_iter_(num_first_iter), num_second_iter_(num_second_iter) {}
 
 void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
+    constexpr int kWindow = 60;
+
     // 1. Aggregate the local and fixed keyframes, and local landmarks
 
     // Correct the local keyframes of the current keyframe
     std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> local_keyfrms;
 
     local_keyfrms[curr_keyfrm->id_] = curr_keyfrm;
-    const auto curr_covisibilities = curr_keyfrm->graph_node_->get_covisibilities();
+    const auto curr_covisibilities = curr_keyfrm->map_db_->getKeyframes<vector>(
+                                            curr_keyfrm->id_-kWindow, curr_keyfrm->id_);
     for (const auto& local_keyfrm : curr_covisibilities) {
         if (!local_keyfrm) {
             continue;

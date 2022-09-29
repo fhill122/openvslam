@@ -32,11 +32,6 @@ void map_database::add_keyframe(const std::shared_ptr<keyframe>& keyfrm) {
     }
 }
 
-void map_database::erase_keyframe(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_map_access_);
-    keyframes_.erase(keyfrm->id_);
-}
-
 void map_database::add_landmark(std::shared_ptr<landmark>& lm) {
     std::lock_guard<std::mutex> lock(mtx_map_access_);
     landmarks_[lm->id_] = lm;
@@ -85,11 +80,6 @@ std::vector<std::shared_ptr<landmark>> map_database::get_all_landmarks() const {
 unsigned int map_database::get_num_landmarks() const {
     std::lock_guard<std::mutex> lock(mtx_map_access_);
     return landmarks_.size();
-}
-
-unsigned int map_database::get_max_keyframe_id() const {
-    std::lock_guard<std::mutex> lock(mtx_map_access_);
-    return max_keyfrm_id_;
 }
 
 void map_database::clear() {

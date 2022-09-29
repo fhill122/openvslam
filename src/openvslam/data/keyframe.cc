@@ -19,7 +19,7 @@ std::atomic<unsigned int> keyframe::next_id_{0};
 
 keyframe::keyframe(const frame& frm, map_database* map_db)
     : // meta information
-      id_(next_id_++), src_frm_id_(frm.id_), timestamp_(frm.timestamp_),
+      id_(next_id_++), timestamp_(frm.timestamp_),
       // camera parameters
       camera_(frm.camera_), depth_thr_(frm.depth_thr_),
       // constant observations
@@ -49,7 +49,7 @@ keyframe::keyframe(const unsigned int id, const unsigned int src_frm_id, const d
                    const unsigned int num_scale_levels, const float scale_factor,
                    bow_vocabulary* bow_vocab, map_database* map_db)
     : // meta information
-      id_(id), src_frm_id_(src_frm_id), timestamp_(timestamp),
+      id_(id), timestamp_(timestamp),
       // camera parameters
       camera_(camera), depth_thr_(depth_thr),
       // constant observations
@@ -84,8 +84,6 @@ keyframe::~keyframe() {}
 
 std::shared_ptr<keyframe> keyframe::make_keyframe(const frame& frm, map_database* map_db) {
     auto ptr = std::allocate_shared<keyframe>(Eigen::aligned_allocator<keyframe>(), frm, map_db);
-    // covisibility graph node (connections is not assigned yet)
-    ptr->graph_node_ = openvslam::make_unique<graph_node>(ptr, true);
     return ptr;
 }
 
@@ -106,8 +104,6 @@ std::shared_ptr<keyframe> keyframe::make_keyframe(
         stereo_x_right, depths, descriptors,
         num_scale_levels, scale_factor,
         bow_vocab, map_db);
-    // covisibility graph node (connections is not assigned yet)
-    ptr->graph_node_ = openvslam::make_unique<graph_node>(ptr, false);
     return ptr;
 }
 

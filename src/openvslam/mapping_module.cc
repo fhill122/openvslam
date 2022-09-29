@@ -13,6 +13,8 @@
 
 #include <spdlog/spdlog.h>
 
+using namespace std;
+
 namespace openvslam {
 
 mapping_module::mapping_module(const YAML::Node& yaml_node, data::map_database* map_db)
@@ -201,33 +203,28 @@ void mapping_module::store_new_keyframe() {
         lm->update_normal_and_depth();
         lm->compute_descriptor();
     }
-    cur_keyfrm_->graph_node_->update_connections();
 
     // store the new keyframe to the map database
     map_db_->add_keyframe(cur_keyfrm_);
 }
 
 void mapping_module::create_new_landmarks() {
-    // get the covisibilities of `cur_keyfrm_`
-    // in order to triangulate landmarks between `cur_keyfrm_` and each of the covisibilities
-    constexpr unsigned int num_covisibilities = 10;
-    const unsigned int heuristic_ratio = cur_keyfrm_->depth_is_avaliable() ? 1 : 2;
-    const auto cur_covisibilities = cur_keyfrm_->graph_node_->get_top_n_covisibilities(num_covisibilities * heuristic_ratio);
-
+    constexpr int kNumNeighbor = 20;
     // lowe's_ratio will not be used
     match::robust robust_matcher(0.0, false);
 
     // camera center of the current keyframe
     const Vec3_t cur_cam_center = cur_keyfrm_->get_cam_center();
 
-    for (unsigned int i = 0; i < cur_covisibilities.size(); ++i) {
+    for (unsigned int i = 0; i < kNumNeighbor; ++i) {
         // if any keyframe is queued, abort the triangulation
         if (1 < i && keyframe_is_queued()) {
             return;
         }
 
         // get the neighbor keyframe
-        auto ngh_keyfrm = cur_covisibilities.at(i);
+        auto ngh_keyfrm = map_db_->getKeyframe(cur_keyfrm_->id_-i);
+        if (!ngh_keyfrm) return ;
 
         // camera center of the neighbor keyframe
         const Vec3_t ngh_cam_center = ngh_keyfrm->get_cam_center();
@@ -310,8 +307,7 @@ void mapping_module::triangulate_with_two_keyframes(const std::shared_ptr<data::
 
 void mapping_module::update_new_keyframe() {
     // get the targets to check landmark fusion
-    const unsigned int num_covisibilities = cur_keyfrm_->depth_is_avaliable() ? 10 : 20;
-    const auto fuse_tgt_keyfrms = get_second_order_covisibilities(num_covisibilities, 5);
+    const auto fuse_tgt_keyfrms = map_db_->getKeyframes<unordered_set>(cur_keyfrm_->id_-10, cur_keyfrm_->id_);
 
     // resolve the duplication of landmarks between the current keyframe and the targets
     fuse_landmark_duplication(fuse_tgt_keyfrms);
@@ -328,40 +324,8 @@ void mapping_module::update_new_keyframe() {
         lm->compute_descriptor();
         lm->update_normal_and_depth();
     }
-
-    // update the graph
-    cur_keyfrm_->graph_node_->update_connections();
 }
 
-std::unordered_set<std::shared_ptr<data::keyframe>> mapping_module::get_second_order_covisibilities(const unsigned int first_order_thr,
-                                                                                                    const unsigned int second_order_thr) {
-    const auto cur_covisibilities = cur_keyfrm_->graph_node_->get_top_n_covisibilities(first_order_thr);
-
-    std::unordered_set<std::shared_ptr<data::keyframe>> fuse_tgt_keyfrms;
-    fuse_tgt_keyfrms.reserve(cur_covisibilities.size() * 2);
-
-    for (const auto& first_order_covis : cur_covisibilities) {
-        // check if the keyframe is aleady inserted
-        if (static_cast<bool>(fuse_tgt_keyfrms.count(first_order_covis))) {
-            continue;
-        }
-
-        fuse_tgt_keyfrms.insert(first_order_covis);
-
-        // get the covisibilities of the covisibility of the current keyframe
-        const auto ngh_covisibilities = first_order_covis->graph_node_->get_top_n_covisibilities(second_order_thr);
-        for (const auto& second_order_covis : ngh_covisibilities) {
-            // "the covisibilities of the covisibility" contains the current keyframe
-            if (*second_order_covis == *cur_keyfrm_) {
-                continue;
-            }
-
-            fuse_tgt_keyfrms.insert(second_order_covis);
-        }
-    }
-
-    return fuse_tgt_keyfrms;
-}
 
 void mapping_module::fuse_landmark_duplication(const std::unordered_set<std::shared_ptr<data::keyframe>>& fuse_tgt_keyfrms) {
     match::fuse matcher;
@@ -377,6 +341,7 @@ void mapping_module::fuse_landmark_duplication(const std::unordered_set<std::sha
         }
     }
 
+    // todo ivan. why do it again with the other way around? this is a heavy step, u got too much time?
     {
         // reproject the landmarks observed in each of the targets to each of the current frame, and acquire
         // - additional matches

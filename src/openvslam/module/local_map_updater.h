@@ -2,6 +2,7 @@
 #define OPENVSLAM_MODULE_LOCAL_MAP_UPDATER_H
 
 #include <memory>
+#include "openvslam/data/map_database.h"
 
 namespace openvslam {
 
@@ -15,59 +16,30 @@ namespace module {
 
 class local_map_updater {
 public:
-    using keyframe_weights_t = std::unordered_map<std::shared_ptr<data::keyframe>, unsigned int>;
+    static std::vector<std::shared_ptr<data::landmark>>
+    GetLocalLandmarks(const data::frame& curr_frm, const data::map_database *map_db, unsigned int num_kf){
+        std::set<std::shared_ptr<data::landmark>> local_lms;
 
-    //! Constructor
-    explicit local_map_updater(const data::frame& curr_frm, const unsigned int max_num_local_keyfrms);
+        auto kfs = map_db->getKeyframes<std::vector>(curr_frm.ref_keyfrm_->id_-num_kf, curr_frm.ref_keyfrm_->id_+1);
 
-    //! Destructor
-    ~local_map_updater() = default;
+        for (const auto& keyfrm : kfs) {
+            const auto& lms = keyfrm->get_landmarks();
 
-    //! Get the local keyframes
-    std::vector<std::shared_ptr<data::keyframe>> get_local_keyframes() const;
+            for (const auto& lm : lms) {
+                if (!lm) {
+                    continue;
+                }
+                if (lm->will_be_erased()) {
+                    continue;
+                }
 
-    //! Get the local landmarks
-    std::vector<std::shared_ptr<data::landmark>> get_local_landmarks() const;
+                // todo ivan. shared_ptr copy maybe heavy
+                local_lms.insert(lm);
+            }
+        }
 
-    //! Get the nearest covisibility
-    std::shared_ptr<data::keyframe> get_nearest_covisibility() const;
-
-    //! Acquire the new local map
-    bool acquire_local_map();
-
-private:
-    //! Find the local keyframes
-    bool find_local_keyframes();
-
-    //! Compute keyframe weights
-    keyframe_weights_t count_keyframe_weights() const;
-
-    //! Find the first-order local keyframes
-    auto find_first_local_keyframes(const keyframe_weights_t& keyfrm_weights)
-        -> std::vector<std::shared_ptr<data::keyframe>>;
-
-    //! Find the second-order local keyframes
-    auto find_second_local_keyframes(const std::vector<std::shared_ptr<data::keyframe>>& first_local_keyframes) const
-        -> std::vector<std::shared_ptr<data::keyframe>>;
-
-    //! Find the local landmarks
-    bool find_local_landmarks();
-
-    // frame ID
-    const unsigned int frm_id_;
-    // landmark associations
-    const std::vector<std::shared_ptr<data::landmark>> frm_lms_;
-    // the number of keypoints
-    const unsigned int num_keypts_;
-    // maximum number of the local keyframes
-    const unsigned int max_num_local_keyfrms_;
-
-    // found local keyframes
-    std::vector<std::shared_ptr<data::keyframe>> local_keyfrms_;
-    // found local landmarks
-    std::vector<std::shared_ptr<data::landmark>> local_lms_;
-    // the nearst keyframe in covisibility graph, which will be found in find_first_local_keyframes()
-    std::shared_ptr<data::keyframe> nearest_covisibility_;
+        return {local_lms.begin(), local_lms.end()};
+    }
 };
 
 } // namespace module

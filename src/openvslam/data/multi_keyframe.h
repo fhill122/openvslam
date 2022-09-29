@@ -15,6 +15,14 @@ struct MultiKeyframe {
     std::vector<std::shared_ptr<keyframe>> frames;
     camera::CameraRig* rig;
 
+    //! keyframe ID
+    unsigned int id_;
+    //! next keyframe ID
+    static std::atomic<unsigned int> next_id_;
+
+    //! timestamp in seconds
+    double timestamp_;
+
     // Camera rig pose
 
     bool cam_pose_cw_is_valid_ = false;
@@ -42,6 +50,14 @@ struct MultiKeyframe {
     Vec3_t spacialTriangulate(){
 
     }
+
+    // operator overrides
+    bool operator==(const MultiKeyframe& keyfrm) const { return id_ == keyfrm.id_; }
+    bool operator!=(const MultiKeyframe& keyfrm) const { return !(*this == keyfrm); }
+    bool operator<(const MultiKeyframe& keyfrm) const { return id_ < keyfrm.id_; }
+    bool operator<=(const MultiKeyframe& keyfrm) const { return id_ <= keyfrm.id_; }
+    bool operator>(const MultiKeyframe& keyfrm) const { return id_ > keyfrm.id_; }
+    bool operator>=(const MultiKeyframe& keyfrm) const { return id_ >= keyfrm.id_; }
 
     /* poses api */
 

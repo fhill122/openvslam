@@ -4,7 +4,6 @@
 #include "openvslam/type.h"
 #include "openvslam/camera/base.h"
 #include "openvslam/camera/cube_space.h"
-#include "openvslam/data/graph_node.h"
 #include "openvslam/data/bow_vocabulary.h"
 
 #include <set>
@@ -195,15 +194,12 @@ public:
     // meta information
 
     //! keyframe ID
-    unsigned int id_;
+    unsigned int id_;  // todo ivan. rm
     //! next keyframe ID
-    static std::atomic<unsigned int> next_id_;
-
-    //! source frame ID
-    const unsigned int src_frm_id_;
+    static std::atomic<unsigned int> next_id_; // todo ivan. rm
 
     //! timestamp in seconds
-    const double timestamp_;
+    const double timestamp_; // todo ivan. rm
 
     //-----------------------------------------
     // camera parameters
@@ -249,12 +245,6 @@ public:
 #endif
 
     //-----------------------------------------
-    // covisibility graph
-
-    //! graph node
-    std::unique_ptr<graph_node> graph_node_ = nullptr;
-
-    //-----------------------------------------
     // ORB scale pyramid information
 
     //! number of scale levels
@@ -269,6 +259,14 @@ public:
     const std::vector<float> level_sigma_sq_;
     //! list of 1 / sigma^2 for optimization
     const std::vector<float> inv_level_sigma_sq_;
+
+    //-----------------------------------------
+    // databases
+
+    //! map database
+    map_database* map_db_;
+    //! BoW vocabulary
+    bow_vocabulary* bow_vocab_;
 
 private:
     //-----------------------------------------
@@ -290,14 +288,6 @@ private:
     mutable std::mutex mtx_observations_;
     //! observed landmarks
     std::vector<std::shared_ptr<landmark>> landmarks_;
-
-    //-----------------------------------------
-    // databases
-
-    //! map database
-    map_database* map_db_;
-    //! BoW vocabulary
-    bow_vocabulary* bow_vocab_;
 
     //-----------------------------------------
     // flags

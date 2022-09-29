@@ -7,6 +7,7 @@
 #include "openvslam/publish/frame_publisher.h"
 #include "openvslam/publish/map_publisher.h"
 #include "openvslam/util/yaml.h"
+#include "openvslam/data/map_database.h"
 
 #include <opencv2/highgui.hpp>
 
@@ -232,23 +233,8 @@ void viewer::draw_keyframes() {
 
             const openvslam::Vec3_t cam_center_1 = keyfrm->get_cam_center();
 
-            // covisibility graph
-            const auto covisibilities = keyfrm->graph_node_->get_covisibilities_over_weight(100);
-            if (!covisibilities.empty()) {
-                for (const auto covisibility : covisibilities) {
-                    if (!covisibility) {
-                        continue;
-                    }
-                    if (covisibility->id_ < keyfrm->id_) {
-                        continue;
-                    }
-                    const openvslam::Vec3_t cam_center_2 = covisibility->get_cam_center();
-                    draw_edge(cam_center_1, cam_center_2);
-                }
-            }
-
             // spanning tree
-            auto spanning_parent = keyfrm->graph_node_->get_spanning_parent();
+            auto spanning_parent = keyfrm->map_db_->getKeyframe(keyfrm->id_-1);
             if (spanning_parent) {
                 const openvslam::Vec3_t cam_center_2 = spanning_parent->get_cam_center();
                 draw_edge(cam_center_1, cam_center_2);

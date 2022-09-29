@@ -242,6 +242,7 @@ unsigned int fuse::replace_duplication(const std::shared_ptr<data::keyframe>& ke
             // -> Duplication exists
             if (!lm_in_keyfrm->will_be_erased()) {
                 // Replace with more reliable 3D points (= more observable)
+                // todo ivan. this is just weird. is this fusion really proper? compare feature dist at least?
                 if (lm->num_observations() < lm_in_keyfrm->num_observations()) {
                     // Replace lm with lm_in_keyfrm
                     lm->replace(lm_in_keyfrm);

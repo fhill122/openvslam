@@ -42,12 +42,6 @@ public:
     void add_keyframe(const std::shared_ptr<keyframe>& keyfrm);
 
     /**
-     * Erase keyframe from the database
-     * @param keyfrm
-     */
-    void erase_keyframe(const std::shared_ptr<keyframe>& keyfrm);
-
-    /**
      * Add landmark to the database
      * @param lm
      */
@@ -70,6 +64,26 @@ public:
      * @return
      */
     std::vector<std::shared_ptr<landmark>> get_local_landmarks() const;
+
+    std::shared_ptr<keyframe> getKeyframe(std::uint32_t id) const{
+        std::lock_guard<std::mutex> lock(mtx_map_access_);
+        auto itr = keyframes_.find(id);
+        return itr==keyframes_.end()? nullptr : itr->second;
+    }
+
+    template< template <class, class...> class ContainerT>
+    ContainerT<std::shared_ptr<data::keyframe>> getKeyframes(int id_start, int id_end) const{
+        CV_Assert(id_end>id_start);
+        id_start = std::max(0, id_start);
+        ContainerT<std::shared_ptr<data::keyframe>> out;
+        out.reserve(id_end-id_start);
+        std::lock_guard<std::mutex> lock(mtx_map_access_);
+        for (auto i = id_start; i < id_end; ++i) {
+            auto itr = keyframes_.find(i);
+            if (itr!=keyframes_.end()) out.insert(out.end(),itr->second);
+        }
+        return out;
+    }
 
     /**
      * Get all of the keyframes in the database
@@ -94,12 +108,6 @@ public:
      * @return
      */
     unsigned int get_num_landmarks() const;
-
-    /**
-     * Get the maximum keyframe ID
-     * @return
-     */
-    unsigned int get_max_keyframe_id() const;
 
     /**
      * Clear the database

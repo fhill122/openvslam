@@ -523,19 +523,8 @@ void tracking_module::update_local_map() {
 
     // acquire the current local map
     constexpr unsigned int max_num_local_keyfrms = 60;
-    auto local_map_updater = module::local_map_updater(curr_frm_, max_num_local_keyfrms);
-    if (!local_map_updater.acquire_local_map()) {
-        return;
-    }
-    // update the variables
-    local_keyfrms_ = local_map_updater.get_local_keyframes();
-    local_landmarks_ = local_map_updater.get_local_landmarks();
-    auto nearest_covisibility = local_map_updater.get_nearest_covisibility();
 
-    // update the reference keyframe for the current frame
-    if (nearest_covisibility) {
-        curr_frm_.ref_keyfrm_ = nearest_covisibility;
-    }
+    local_landmarks_ = module::local_map_updater::GetLocalLandmarks(curr_frm_, map_db_, max_num_local_keyfrms);
 
     map_db_->set_local_landmarks(local_landmarks_);
 }

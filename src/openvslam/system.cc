@@ -144,74 +144,13 @@ const std::shared_ptr<publish::frame_publisher> system::get_frame_publisher() co
     return frame_publisher_;
 }
 
-void system::enable_mapping_module() {
-    std::lock_guard<std::mutex> lock(mtx_mapping_);
-    if (!system_is_running_) {
-        spdlog::critical("please call system::enable_mapping_module() after system::startup()");
-    }
-    // resume the mapping module
-    mapper_->resume();
-    // inform to the tracking module
-    tracker_->set_mapping_module_status(true);
-}
 
-void system::disable_mapping_module() {
-    std::lock_guard<std::mutex> lock(mtx_mapping_);
-    if (!system_is_running_) {
-        spdlog::critical("please call system::disable_mapping_module() after system::startup()");
-    }
-    // pause the mapping module
-    mapper_->request_pause();
-    // wait until it stops
-    while (!mapper_->is_paused()) {
-        std::this_thread::sleep_for(std::chrono::microseconds(1000));
-    }
-    // inform to the tracking module
-    tracker_->set_mapping_module_status(false);
-}
-
-bool system::mapping_module_is_enabled() const {
-    return !mapper_->is_paused();
-}
-
-std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask) {
-    assert(cam_rig_->cameras.size() == 1 && cam_rig_->cameras[0]->setup_type_ == camera::setup_type_t::Monocular);
+std::shared_ptr<Mat44_t> system::feed_multi_frames(const std::vector<cv::Mat> &imgs, double timestamp,
+                                                   const std::vector<cv::Mat> &masks) {
 
     check_reset_request();
 
-    const auto cam_pose_wc = tracker_->track_monocular_image(img, timestamp, mask);
-
-    frame_publisher_->update(tracker_);
-    if (tracker_->tracking_state_ == tracker_state_t::Tracking && cam_pose_wc) {
-        map_publisher_->set_current_cam_pose(tracker_->curr_frm_.get_cam_pose());
-        map_publisher_->set_current_cam_pose_wc(*cam_pose_wc);
-    }
-
-    return cam_pose_wc;
-}
-
-std::shared_ptr<Mat44_t> system::feed_stereo_frame(const cv::Mat& left_img, const cv::Mat& right_img, const double timestamp, const cv::Mat& mask) {
-    assert(cam_rig_->cameras.size() == 1 && cam_rig_->cameras[0]->setup_type_ == camera::setup_type_t::Stereo);
-
-    check_reset_request();
-
-    const auto cam_pose_wc = tracker_->track_stereo_image(left_img, right_img, timestamp, mask);
-
-    frame_publisher_->update(tracker_);
-    if (tracker_->tracking_state_ == tracker_state_t::Tracking && cam_pose_wc) {
-        map_publisher_->set_current_cam_pose(tracker_->curr_frm_.get_cam_pose());
-        map_publisher_->set_current_cam_pose_wc(*cam_pose_wc);
-    }
-
-    return cam_pose_wc;
-}
-
-std::shared_ptr<Mat44_t> system::feed_RGBD_frame(const cv::Mat& rgb_img, const cv::Mat& depthmap, const double timestamp, const cv::Mat& mask) {
-    assert(cam_rig_->cameras.size() == 1 && cam_rig_->cameras[0]->setup_type_ == camera::setup_type_t::RGBD);
-
-    check_reset_request();
-
-    const auto cam_pose_wc = tracker_->track_RGBD_image(rgb_img, depthmap, timestamp, mask);
+    const auto cam_pose_wc = tracker_->track_multi_images(imgs, timestamp, masks);
 
     frame_publisher_->update(tracker_);
     if (tracker_->tracking_state_ == tracker_state_t::Tracking && cam_pose_wc) {

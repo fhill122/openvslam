@@ -23,7 +23,7 @@ frame::frame(const cv::Mat& img_gray, const double timestamp,
              feature::orb_extractor* extractor, bow_vocabulary* bow_vocab,
              camera::base* camera, const float depth_thr,
              const cv::Mat& mask)
-    : id_(next_id_++), bow_vocab_(bow_vocab), extractor_(extractor), extractor_right_(nullptr),
+    : img_(img_gray), id_(next_id_++), bow_vocab_(bow_vocab), extractor_(extractor), extractor_right_(nullptr),
       timestamp_(timestamp), camera_(camera), depth_thr_(depth_thr) {
     // Get ORB scale
     update_orb_info();
@@ -52,57 +52,56 @@ frame::frame(const cv::Mat& img_gray, const double timestamp,
 
     // Initialize association with 3D points
     landmarks_ = std::vector<std::shared_ptr<landmark>>(num_keypts_, nullptr);
-    outlier_flags_ = std::vector<bool>(num_keypts_, false);
 
     // Assign all the keypoints into grid
     assign_keypoints_to_grid(camera_, undist_keypts_, keypt_indices_in_cells_);
 }
 
-frame::frame(const cv::Mat& left_img_gray, const cv::Mat& right_img_gray, const double timestamp,
-             feature::orb_extractor* extractor_left, feature::orb_extractor* extractor_right,
-             bow_vocabulary* bow_vocab, camera::base* camera, const float depth_thr,
-             const cv::Mat& mask)
-    : id_(next_id_++), bow_vocab_(bow_vocab), extractor_(extractor_left), extractor_right_(extractor_right),
-      timestamp_(timestamp), camera_(camera), depth_thr_(depth_thr) {
-    // Get ORB scale
-    update_orb_info();
-
-    // Extract ORB feature
-    std::thread thread_left(&frame::extract_orb, this, left_img_gray, mask, image_side::Left);
-    std::thread thread_right(&frame::extract_orb, this, right_img_gray, mask, image_side::Right);
-    thread_left.join();
-    thread_right.join();
-    num_keypts_ = keypts_.size();
-    if (keypts_.empty()) {
-        spdlog::warn("frame {}: cannot extract any keypoints", id_);
-    }
-
-    // Undistort keypoints
-    camera_->undistort_keypoints(keypts_, undist_keypts_);
-
-    // Estimate depth with stereo match
-    // todo ivan. implement stereo with cube space
-    match::stereo stereo_matcher(extractor_left->image_pyramid_, extractor_right_->image_pyramid_,
-                                 keypts_, keypts_right_, descriptors_, descriptors_right_,
-                                 scale_factors_, inv_scale_factors_,
-                                 camera->focal_x_baseline_, camera_->true_baseline_);
-    stereo_matcher.compute(stereo_x_right_, depths_);
-
-    // Convert to bearing vector
-    camera->convert_keypoints_to_bearings(undist_keypts_, bearings_);
-
-    // cube space
-    if (camera_->model_type_==camera::model_type_t::VirtualCube){
-        dynamic_cast<camera::CubeSpace*>(camera_)->convert_bearings_to_cube(bearings_, cube_keypts_);
-    }
-
-    // Initialize association with 3D points
-    landmarks_ = std::vector<std::shared_ptr<landmark>>(num_keypts_, nullptr);
-    outlier_flags_ = std::vector<bool>(num_keypts_, false);
-
-    // Assign all the keypoints into grid
-    assign_keypoints_to_grid(camera_, undist_keypts_, keypt_indices_in_cells_);
-}
+// frame::frame(const cv::Mat& left_img_gray, const cv::Mat& right_img_gray, const double timestamp,
+//              feature::orb_extractor* extractor_left, feature::orb_extractor* extractor_right,
+//              bow_vocabulary* bow_vocab, camera::base* camera, const float depth_thr,
+//              const cv::Mat& mask)
+//     : id_(next_id_++), bow_vocab_(bow_vocab), extractor_(extractor_left), extractor_right_(extractor_right),
+//       timestamp_(timestamp), camera_(camera), depth_thr_(depth_thr) {
+//     AssertLog(false, "should never be called");
+//     // Get ORB scale
+//     update_orb_info();
+//
+//     // Extract ORB feature
+//     std::thread thread_left(&frame::extract_orb, this, left_img_gray, mask, image_side::Left);
+//     std::thread thread_right(&frame::extract_orb, this, right_img_gray, mask, image_side::Right);
+//     thread_left.join();
+//     thread_right.join();
+//     num_keypts_ = keypts_.size();
+//     if (keypts_.empty()) {
+//         spdlog::warn("frame {}: cannot extract any keypoints", id_);
+//     }
+//
+//     // Undistort keypoints
+//     camera_->undistort_keypoints(keypts_, undist_keypts_);
+//
+//     // Estimate depth with stereo match
+//     // todo ivan. implement stereo with cube space
+//     match::stereo stereo_matcher(extractor_left->image_pyramid_, extractor_right_->image_pyramid_,
+//                                  keypts_, keypts_right_, descriptors_, descriptors_right_,
+//                                  scale_factors_, inv_scale_factors_,
+//                                  camera->focal_x_baseline_, camera_->true_baseline_);
+//     stereo_matcher.compute(stereo_x_right_, depths_);
+//
+//     // Convert to bearing vector
+//     camera->convert_keypoints_to_bearings(undist_keypts_, bearings_);
+//
+//     // cube space
+//     if (camera_->model_type_==camera::model_type_t::VirtualCube){
+//         dynamic_cast<camera::CubeSpace*>(camera_)->convert_bearings_to_cube(bearings_, cube_keypts_);
+//     }
+//
+//     // Initialize association with 3D points
+//     landmarks_ = std::vector<std::shared_ptr<landmark>>(num_keypts_, nullptr);
+//
+//     // Assign all the keypoints into grid
+//     assign_keypoints_to_grid(camera_, undist_keypts_, keypt_indices_in_cells_);
+// }
 
 void frame::set_cam_pose(const Mat44_t& cam_pose_cw) {
     cam_pose_cw_is_valid_ = true;
@@ -265,6 +264,16 @@ void frame::extract_orb(const cv::Mat& img, const cv::Mat& mask, const image_sid
             break;
         }
     }
+}
+
+std::vector<std::pair<int, float>> frame::radiusSearch(float u, float v, float r2) {
+    if (!kdtree_){
+        AssertLog(!undist_keypts_.empty(), "");
+        kdtree_ = make_unique<KeyponitNanoflannAdapter>();
+        kdtree_->build(&undist_keypts_);
+    }
+
+    return kdtree_->radiusSearch(u,v,r2);
 }
 
 } // namespace data

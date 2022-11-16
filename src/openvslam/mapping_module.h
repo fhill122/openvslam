@@ -23,6 +23,7 @@ class base;
 
 namespace data {
 class keyframe;
+struct MultiKeyframe;
 class map_database;
 } // namespace data
 
@@ -45,7 +46,7 @@ public:
     void run();
 
     //! Queue a keyframe to process the mapping
-    void queue_keyframe(const std::shared_ptr<data::keyframe>& keyfrm);
+    void queue_keyframe(const std::shared_ptr<data::MultiKeyframe>& keyfrm);
 
     //! Get the number of queued keyframes
     unsigned int get_num_queued_keyframes() const;
@@ -120,7 +121,9 @@ private:
     void update_new_keyframe();
 
     //! Fuse duplicated landmarks between current keyframe and covisibility keyframes
-    void fuse_landmark_duplication(const std::unordered_set<std::shared_ptr<data::keyframe>>& fuse_tgt_keyfrms);
+    template < template<typename , typename...> typename Container, typename... ContainerParams>
+    void fuse_landmark_duplication(const std::shared_ptr<data::keyframe> &cur_keyfrm,
+                                   const Container<std::shared_ptr<data::keyframe>, ContainerParams...>& fuse_tgt_keyfrms);
 
     //-----------------------------------------
     // management for reset process
@@ -195,7 +198,7 @@ private:
     bool keyframe_is_queued() const;
 
     //! queue for keyframes
-    std::list<std::shared_ptr<data::keyframe>> keyfrms_queue_;
+    std::list<std::shared_ptr<data::MultiKeyframe>> keyfrms_queue_;
 
     //-----------------------------------------
     // optimizer
@@ -213,7 +216,7 @@ private:
     std::atomic<bool> keyfrm_acceptability_{true};
 
     //! current keyframe which is used in the current mapping
-    std::shared_ptr<data::keyframe> cur_keyfrm_ = nullptr;
+    std::shared_ptr<data::MultiKeyframe> cur_keyfrm_ = nullptr;
 
     //-----------------------------------------
     // configurations

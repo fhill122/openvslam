@@ -22,6 +22,8 @@
 #include <fbow/bow_feat_vector.h>
 #endif
 
+#include <nanoflann/nanoflann.h>
+
 namespace openvslam {
 
 namespace camera {
@@ -36,6 +38,45 @@ namespace data {
 
 class keyframe;
 class landmark;
+
+
+struct KeyponitNanoflannAdapter{
+    struct DataAdapter{
+        std::vector<cv::KeyPoint> *keypts;
+
+        inline size_t kdtree_get_point_count() const {
+            return keypts->size();
+        }
+
+        inline float kdtree_get_pt(const size_t idx, const size_t dim) const {
+            return dim==0? keypts->at(idx).pt.x : keypts->at(idx).pt.y;
+        }
+
+        template <class BBOX> bool kdtree_get_bbox(BBOX&) const { return false; }
+    };
+
+    DataAdapter keypt_data{};
+
+    using KdTreeType = nanoflann::KDTreeSingleIndexAdaptor< nanoflann::L2_Simple_Adaptor<float, DataAdapter>,
+                                                           DataAdapter, 2, int >;
+    std::unique_ptr<KdTreeType> kdtree;
+
+    void build(std::vector<cv::KeyPoint> *keypts){
+        keypt_data.keypts = keypts;
+        kdtree = unique_ptr<KdTreeType>(new KdTreeType(2, keypt_data));
+        kdtree->buildIndex();
+    }
+
+    std::vector<std::pair<int,float>> radiusSearch(float u, float v, float r2) const{
+        nanoflann::SearchParams params;
+        params.sorted = true;
+        float uv[2] = {u, v};
+        std::vector<std::pair<int,float>> out;
+        kdtree->radiusSearch(uv, r2, out, params);
+        return out;
+    }
+};
+
 
 class frame {
 public:
@@ -61,22 +102,29 @@ public:
           camera::base* camera, const float depth_thr,
           const cv::Mat& mask = cv::Mat{});
 
-    /**
-     * Constructor for stereo frame
-     * @param left_img_gray
-     * @param right_img_gray
-     * @param timestamp
-     * @param extractor_left
-     * @param extractor_right
-     * @param bow_vocab
-     * @param camera
-     * @param depth_thr
-     * @param mask
-     */
-    frame(const cv::Mat& left_img_gray, const cv::Mat& right_img_gray, const double timestamp,
-          feature::orb_extractor* extractor_left, feature::orb_extractor* extractor_right, bow_vocabulary* bow_vocab,
-          camera::base* camera, const float depth_thr,
-          const cv::Mat& mask = cv::Mat{});
+    // /**
+    //  * Constructor for stereo frame
+    //  * @param left_img_gray
+    //  * @param right_img_gray
+    //  * @param timestamp
+    //  * @param extractor_left
+    //  * @param extractor_right
+    //  * @param bow_vocab
+    //  * @param camera
+    //  * @param depth_thr
+    //  * @param mask
+    //  */
+    // frame(const cv::Mat& left_img_gray, const cv::Mat& right_img_gray, const double timestamp,
+    //       feature::orb_extractor* extractor_left, feature::orb_extractor* extractor_right, bow_vocabulary* bow_vocab,
+    //       camera::base* camera, const float depth_thr,
+    //       const cv::Mat& mask = cv::Mat{});
+
+    ~frame()=default;
+    frame(const frame&) = delete;
+    frame(frame&&) = default;
+    frame& operator=(const frame&) = delete;
+    frame& operator=(frame&&) = default;
+
 
     /**
      * Set camera pose and refresh rotation and translation
@@ -147,6 +195,10 @@ public:
      */
     Vec3_t triangulate_stereo(const unsigned int idx) const;
 
+    std::vector<std::pair<int,float>> radiusSearch(float u, float v, float r2);
+
+    cv::Mat img_;
+
     //! current frame ID
     unsigned int id_;
 
@@ -186,6 +238,7 @@ public:
     std::vector<camera::CubeSpace::CubePoint> cube_keypts_;
     //! bearing vectors
     eigen_alloc_vector<Vec3_t> bearings_;
+    std::unique_ptr<KeyponitNanoflannAdapter> kdtree_ = nullptr;
 
     //! disparities
     std::vector<float> stereo_x_right_;
@@ -209,9 +262,6 @@ public:
 
     //! landmarks, whose nullptr indicates no-association
     std::vector<std::shared_ptr<landmark>> landmarks_;
-
-    //! outlier flags, which are mainly used in pose optimization and bundle adjustment
-    std::vector<bool> outlier_flags_;
 
     //! cells for storing keypoint indices
     std::vector<std::vector<std::vector<unsigned int>>> keypt_indices_in_cells_;

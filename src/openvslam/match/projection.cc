@@ -8,22 +8,21 @@
 namespace openvslam {
 namespace match {
 
-unsigned int projection::match_frame_and_landmarks(data::frame& frm, const std::vector<std::shared_ptr<data::landmark>>& local_landmarks, const float margin) const {
+unsigned int projection::match_frame_and_landmarks(data::frame& frm, const std::vector<ObservableLandmark>& local_landmarks, const float margin) const {
     unsigned int num_matches = 0;
 
     // Reproject the 3D points to the frame, then acquire the 2D-3D matches
-    for (auto local_lm : local_landmarks) {
-        if (!local_lm->is_observable_in_tracking_) {
-            continue;
-        }
+    for (auto &observe : local_landmarks) {
+        shared_ptr<data::landmark> &local_lm = observe.lm;
+
         if (local_lm->will_be_erased()) {
             continue;
         }
 
-        const auto pred_scale_level = local_lm->scale_level_in_tracking_;
+        const auto pred_scale_level = observe.scale_level_in_tracking;
 
         // Acquire keypoints in the cell where the reprojected 3D points exist
-        const auto indices_in_cell = frm.get_keypoints_in_cell(local_lm->reproj_in_tracking_(0), local_lm->reproj_in_tracking_(1),
+        const auto indices_in_cell = frm.get_keypoints_in_cell(observe.u, observe.v,
                                                                margin * frm.scale_factors_.at(pred_scale_level),
                                                                pred_scale_level - 1, pred_scale_level);
         if (indices_in_cell.empty()) {
@@ -39,12 +38,19 @@ unsigned int projection::match_frame_and_landmarks(data::frame& frm, const std::
         int best_idx = -1;
 
         for (const auto idx : indices_in_cell) {
+            // todo ivan. this is a issue, what if previous frm.landmarks_.at(idx) is better?
+            //  got overridden by later trial when shouldn't or cannot override when should.
+            //  better logic:
+            //    - project all local_landmarks to the image,
+            //    - build a kd tree,
+            //    - for each unmatched 2d keypoint, radius seach local_landmarks and matching
+            //    - note: here landmarks should be properly fused.
             if (frm.landmarks_.at(idx) && frm.landmarks_.at(idx)->has_observation()) {
                 continue;
             }
 
             if (0 < frm.stereo_x_right_.at(idx)) {
-                const auto reproj_error = std::abs(local_lm->x_right_in_tracking_ - frm.stereo_x_right_.at(idx));
+                const auto reproj_error = std::abs(observe.x_right - frm.stereo_x_right_.at(idx));
                 if (margin * frm.scale_factors_.at(pred_scale_level) < reproj_error) {
                     continue;
                 }
@@ -115,9 +121,10 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
             continue;
         }
         // Discard any matches that were marked as outliers after applyng pose optimization
-        if (last_frm.outlier_flags_.at(idx_last)) {
-            continue;
-        }
+        // todo ivan. check this. shouldn't lm be null already?
+        // if (last_frm.outlier_flags_.at(idx_last)) {
+        //     continue;
+        // }
 
         // 3D point coordinates with the global reference
         const Vec3_t pos_w = lm->get_pos_in_world();

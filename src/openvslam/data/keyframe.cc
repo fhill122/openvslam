@@ -17,9 +17,9 @@ namespace data {
 
 std::atomic<unsigned int> keyframe::next_id_{0};
 
-keyframe::keyframe(const frame& frm, map_database* map_db)
+keyframe::keyframe(MultiKeyframe *parent, unsigned int sibling_ind, const frame& frm, map_database* map_db)
     : // meta information
-      id_(next_id_++), timestamp_(frm.timestamp_),
+      parent_(parent), sibling_idx_(sibling_ind), id_(next_id_++), timestamp_(frm.timestamp_),
       // camera parameters
       camera_(frm.camera_), depth_thr_(frm.depth_thr_),
       // constant observations
@@ -41,72 +41,12 @@ keyframe::keyframe(const frame& frm, map_database* map_db)
     set_cam_pose(frm.cam_pose_cw_);
 }
 
-keyframe::keyframe(const unsigned int id, const unsigned int src_frm_id, const double timestamp,
-                   const Mat44_t& cam_pose_cw, camera::base* camera, const float depth_thr,
-                   const unsigned int num_keypts, const std::vector<cv::KeyPoint>& keypts,
-                   const std::vector<cv::KeyPoint>& undist_keypts, const eigen_alloc_vector<Vec3_t>& bearings,
-                   const std::vector<float>& stereo_x_right, const std::vector<float>& depths, const cv::Mat& descriptors,
-                   const unsigned int num_scale_levels, const float scale_factor,
-                   bow_vocabulary* bow_vocab, map_database* map_db)
-    : // meta information
-      id_(id), timestamp_(timestamp),
-      // camera parameters
-      camera_(camera), depth_thr_(depth_thr),
-      // constant observations
-      num_keypts_(num_keypts), keypts_(keypts), undist_keypts_(undist_keypts), bearings_(bearings),
-      keypt_indices_in_cells_(assign_keypoints_to_grid(camera, undist_keypts)),
-      stereo_x_right_(stereo_x_right), depths_(depths), descriptors_(descriptors.clone()),
-      // ORB scale pyramid
-      num_scale_levels_(num_scale_levels), scale_factor_(scale_factor), log_scale_factor_(std::log(scale_factor)),
-      scale_factors_(feature::orb_params::calc_scale_factors(num_scale_levels, scale_factor)),
-      level_sigma_sq_(feature::orb_params::calc_level_sigma_sq(num_scale_levels, scale_factor)),
-      inv_level_sigma_sq_(feature::orb_params::calc_inv_level_sigma_sq(num_scale_levels, scale_factor)),
-      // others
-      landmarks_(std::vector<std::shared_ptr<landmark>>(num_keypts, nullptr)),
-      // databases
-      map_db_(map_db), bow_vocab_(bow_vocab) {
-    // compute BoW (bow_vec_, bow_feat_vec_) using descriptors_
-    compute_bow();
-    // set pose parameters (cam_pose_wc_, cam_center_) using cam_pose_cw_
-    set_cam_pose(cam_pose_cw);
-
-    AssertLog(false, "not implemented");
-
-    // The following process needs to take place:
-    //   should set the pointers of landmarks_ using add_landmark()
-    //   should set connections using graph_node->update_connections()
-    //   should set spanning_parent_ using graph_node->set_spanning_parent()
-    //   should set spanning_children_ using graph_node->add_spanning_child()
-    //   should set loop_edges_ using graph_node->add_loop_edge()
-}
-
 keyframe::~keyframe() {}
 
-std::shared_ptr<keyframe> keyframe::make_keyframe(const frame& frm, map_database* map_db) {
-    auto ptr = std::allocate_shared<keyframe>(Eigen::aligned_allocator<keyframe>(), frm, map_db);
-    return ptr;
+std::shared_ptr<keyframe> keyframe::make_keyframe(MultiKeyframe *parent, unsigned int sibling_ind,
+                                                  const frame& frm, map_database* map_db) {
+    return std::allocate_shared<keyframe>(Eigen::aligned_allocator<keyframe>(), parent, sibling_ind, frm, map_db);
 }
-
-std::shared_ptr<keyframe> keyframe::make_keyframe(
-    const unsigned int id, const unsigned int src_frm_id, const double timestamp,
-    const Mat44_t& cam_pose_cw, camera::base* camera, const float depth_thr,
-    const unsigned int num_keypts, const std::vector<cv::KeyPoint>& keypts,
-    const std::vector<cv::KeyPoint>& undist_keypts, const eigen_alloc_vector<Vec3_t>& bearings,
-    const std::vector<float>& stereo_x_right, const std::vector<float>& depths, const cv::Mat& descriptors,
-    const unsigned int num_scale_levels, const float scale_factor,
-    bow_vocabulary* bow_vocab, map_database* map_db) {
-    auto ptr = std::allocate_shared<keyframe>(
-        Eigen::aligned_allocator<keyframe>(),
-        id, src_frm_id, timestamp,
-        cam_pose_cw, camera, depth_thr,
-        num_keypts, keypts,
-        undist_keypts, bearings,
-        stereo_x_right, depths, descriptors,
-        num_scale_levels, scale_factor,
-        bow_vocab, map_db);
-    return ptr;
-}
-
 
 void keyframe::set_cam_pose(const Mat44_t& cam_pose_cw) {
     std::lock_guard<std::mutex> lock(mtx_pose_);
@@ -169,14 +109,6 @@ void keyframe::add_landmark(std::shared_ptr<landmark> lm, const unsigned int idx
 void keyframe::erase_landmark_with_index(const unsigned int idx) {
     std::lock_guard<std::mutex> lock(mtx_observations_);
     landmarks_.at(idx) = nullptr;
-}
-
-void keyframe::erase_landmark(const std::shared_ptr<landmark>& lm) {
-    std::lock_guard<std::mutex> lock(mtx_observations_);
-    int idx = lm->get_index_in_keyframe(shared_from_this());
-    if (0 <= idx) {
-        landmarks_.at(static_cast<unsigned int>(idx)) = nullptr;
-    }
 }
 
 void keyframe::replace_landmark(std::shared_ptr<landmark>& lm, const unsigned int idx) {

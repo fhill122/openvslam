@@ -68,6 +68,11 @@ list(APPEND EXECUTABLE_TARGETS run_kitti_slam)
 #add_executable(run_tum_rgbd_localization run_tum_rgbd_localization.cc util/tum_rgbd_util.cc)
 #list(APPEND EXECUTABLE_TARGETS run_tum_rgbd_localization)
 
+add_executable(get_cam_overlap
+    get_cam_overlap.cc
+)
+list(APPEND EXECUTABLE_TARGETS get_cam_overlap)
+
 foreach(EXECUTABLE_TARGET IN LISTS EXECUTABLE_TARGETS)
     # Set output directory for executables
     set_target_properties(${EXECUTABLE_TARGET} PROPERTIES
@@ -115,3 +120,26 @@ foreach(EXECUTABLE_TARGET IN LISTS EXECUTABLE_TARGETS)
                                $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/3rd/popl/include>
                                $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/3rd/spdlog/include>)
 endforeach()
+
+find_package(roscpp QUIET)
+if(${roscpp_FOUND})
+    set(ROS_INCLUDES ${ROS_INCLUDES} ${roscpp_INCLUDE_DIRS})
+    set(ROS_LIBS ${ROS_LIBS} ${roscpp_LIBRARIES})
+
+    find_package(pcl_ros REQUIRED)
+    set(ROS_INCLUDES ${ROS_INCLUDES} ${pcl_ros_INCLUDE_DIRS})
+    set(ROS_LIBS ${ROS_LIBS} ${pcl_ros_LIBRARIES})
+
+    add_executable(triang_init
+        triang_init.cc
+    )
+    target_link_libraries(triang_init
+        ${PROJECT_NAME}
+        opencv_imgcodecs
+        opencv_videoio
+        ${ROS_LIBS}
+    )
+    target_include_directories(triang_init PUBLIC
+        ${ROS_INCLUDES}
+    )
+endif()

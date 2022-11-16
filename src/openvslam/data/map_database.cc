@@ -24,15 +24,16 @@ map_database::~map_database() {
     spdlog::debug("DESTRUCT: data::map_database");
 }
 
-void map_database::add_keyframe(const std::shared_ptr<keyframe>& keyfrm) {
+void map_database::add_keyframe(const std::shared_ptr<MultiKeyframe>& keyfrm) {
     std::lock_guard<std::mutex> lock(mtx_map_access_);
     keyframes_[keyfrm->id_] = keyfrm;
     if (keyfrm->id_ > max_keyfrm_id_) {
         max_keyfrm_id_ = keyfrm->id_;
     }
+    spdlog::info("added kf {}", keyfrm->id_);
 }
 
-void map_database::add_landmark(std::shared_ptr<landmark>& lm) {
+void map_database::add_landmark(const std::shared_ptr<landmark>& lm) {
     std::lock_guard<std::mutex> lock(mtx_map_access_);
     landmarks_[lm->id_] = lm;
 }
@@ -52,9 +53,9 @@ std::vector<std::shared_ptr<landmark>> map_database::get_local_landmarks() const
     return local_landmarks_;
 }
 
-std::vector<std::shared_ptr<keyframe>> map_database::get_all_keyframes() const {
+std::vector<std::shared_ptr<MultiKeyframe>> map_database::get_all_keyframes() const {
     std::lock_guard<std::mutex> lock(mtx_map_access_);
-    std::vector<std::shared_ptr<keyframe>> keyframes;
+    std::vector<std::shared_ptr<MultiKeyframe>> keyframes;
     keyframes.reserve(keyframes_.size());
     for (const auto& id_keyframe : keyframes_) {
         keyframes.push_back(id_keyframe.second);

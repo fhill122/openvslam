@@ -1,6 +1,5 @@
 #include "pangolin_viewer/viewer.h"
 
-#include "openvslam/config.h"
 #include "openvslam/system.h"
 #include "openvslam/data/keyframe.h"
 #include "openvslam/data/landmark.h"
@@ -10,6 +9,8 @@
 #include "openvslam/data/map_database.h"
 
 #include <opencv2/highgui.hpp>
+
+using namespace std;
 
 namespace pangolin_viewer {
 
@@ -28,8 +29,7 @@ viewer::viewer(const YAML::Node& yaml_node, openvslam::system* system,
       point_size_(yaml_node["point_size"].as<unsigned int>(2)),
       camera_size_(yaml_node["camera_size"].as<float>(0.15)),
       camera_line_width_(yaml_node["camera_line_width"].as<unsigned int>(2)),
-      cs_(yaml_node["color_scheme"].as<std::string>("black")),
-      mapping_mode_(system->mapping_module_is_enabled()){}
+      cs_(yaml_node["color_scheme"].as<std::string>("black")) {}
 
 void viewer::run() {
     is_terminated_ = false;
@@ -56,7 +56,9 @@ void viewer::run() {
     create_menu_panel();
 
     // create frame window
-    cv::namedWindow(frame_viewer_name_);
+    for (int i = 0; i < system_->cam_rig_->cameras.size(); ++i) {
+        cv::namedWindow(frame_viewer_name_ + "_" + to_string(i));
+    }
 
     pangolin::OpenGlMatrix gl_cam_pose_wc;
     gl_cam_pose_wc.SetIdentity();
@@ -89,8 +91,9 @@ void viewer::run() {
         pangolin::FinishFrame();
 
         // 2. draw the current frame image
-
-        cv::imshow(frame_viewer_name_, frame_publisher_->draw_frame());
+        for (int i = 0; i < system_->cam_rig_->cameras.size(); ++i) {
+            cv::imshow(frame_viewer_name_ + "_" + to_string(i), frame_publisher_->draw_frame(i));
+        }
         cv::waitKey(interval_ms_);
 
         // 3. state transition
@@ -129,7 +132,6 @@ void viewer::create_menu_panel() {
     menu_show_lms_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show Landmarks", true, true));
     menu_show_local_map_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show Local Map", true, true));
     menu_show_graph_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show Graph", true, true));
-    menu_mapping_mode_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Mapping", mapping_mode_, true));
     menu_pause_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Pause", false, true));
     menu_reset_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Reset", false, false));
     menu_terminate_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Terminate", false, false));
@@ -201,7 +203,7 @@ void viewer::draw_keyframes() {
     // frustum size of keyframes
     const float w = keyfrm_size_ * *menu_frm_size_;
 
-    std::vector<std::shared_ptr<openvslam::data::keyframe>> keyfrms;
+    std::vector<std::shared_ptr<openvslam::data::MultiKeyframe>> keyfrms;
     map_publisher_->get_keyframes(keyfrms);
 
     if (*menu_show_keyfrms_) {
@@ -211,7 +213,7 @@ void viewer::draw_keyframes() {
             if (!keyfrm) {
                 continue;
             }
-            draw_camera(keyfrm->get_cam_pose_inv(), w);
+            draw_camera(keyfrm->getCamPoseInv(), w);
         }
     }
 
@@ -231,12 +233,12 @@ void viewer::draw_keyframes() {
                 continue;
             }
 
-            const openvslam::Vec3_t cam_center_1 = keyfrm->get_cam_center();
+            const openvslam::Vec3_t cam_center_1 = keyfrm->getCamCenter();
 
             // spanning tree
-            auto spanning_parent = keyfrm->map_db_->getKeyframe(keyfrm->id_-1);
+            auto spanning_parent = keyfrm->at(0)->map_db_->getKeyframe(keyfrm->id_-1);
             if (spanning_parent) {
-                const openvslam::Vec3_t cam_center_2 = spanning_parent->get_cam_center();
+                const openvslam::Vec3_t cam_center_2 = spanning_parent->getCamCenter();
                 draw_edge(cam_center_1, cam_center_2);
             }
         }
@@ -345,19 +347,10 @@ void viewer::reset() {
     *menu_show_lms_ = true;
     *menu_show_local_map_ = true;
     *menu_show_graph_ = true;
-    *menu_mapping_mode_ = mapping_mode_;
 
     // reset menu button
     *menu_reset_ = false;
     *menu_terminate_ = false;
-
-    // reset mapping mode
-    if (mapping_mode_) {
-        system_->enable_mapping_module();
-    }
-    else {
-        system_->disable_mapping_module();
-    }
 
     // reset internal state
     follow_camera_ = true;
@@ -373,16 +366,6 @@ void viewer::check_state_transition() {
     }
     else if (!*menu_pause_ && system_->tracker_is_paused()) {
         system_->resume_tracker();
-    }
-
-    // mapping module
-    if (*menu_mapping_mode_ && !mapping_mode_) {
-        system_->enable_mapping_module();
-        mapping_mode_ = true;
-    }
-    else if (!*menu_mapping_mode_ && mapping_mode_) {
-        system_->disable_mapping_module();
-        mapping_mode_ = false;
     }
 }
 

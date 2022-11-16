@@ -11,7 +11,7 @@ namespace openvslam {
 class config;
 
 namespace data {
-class frame;
+struct MultiFrame;
 class map_database;
 } // namespace data
 
@@ -49,11 +49,8 @@ public:
     //! Get initial matches between the initial and current frames
     std::vector<int> get_initial_matches() const;
 
-    //! Get the initial frame ID which succeeded in initialization
-    unsigned int get_initial_frame_id() const;
-
     //! Initialize with the current frame
-    bool initialize(data::frame& curr_frm);
+    bool initialize(data::MultiFrame& curr_frm);
 
 private:
     //! camera setup type
@@ -87,17 +84,17 @@ private:
     //-----------------------------------------
     // for monocular camera model
 
-    //! Create initializer for monocular
-    void create_initializer(data::frame& curr_frm);
-
-    //! Try to initialize a map with monocular camera setup
-    bool try_initialize_for_monocular(data::frame& curr_frm);
-
-    //! Create an initial map with monocular camera setup
-    bool create_map_for_monocular(data::frame& curr_frm);
-
-    //! Scaling up or down a initial map
-    void scale_map(const std::shared_ptr<data::keyframe>& init_keyfrm, const std::shared_ptr<data::keyframe>& curr_keyfrm, const double scale);
+    // //! Create initializer for monocular
+    // void create_initializer(data::frame& curr_frm);
+    //
+    // //! Try to initialize a map with monocular camera setup
+    // bool try_initialize_for_monocular(data::frame& curr_frm);
+    //
+    // //! Create an initial map with monocular camera setup
+    // bool create_map_for_monocular(data::frame& curr_frm);
+    //
+    // //! Scaling up or down a initial map
+    // void scale_map(const std::shared_ptr<data::keyframe>& init_keyfrm, const std::shared_ptr<data::keyframe>& curr_keyfrm, const double scale);
 
     //! initializer for monocular
     std::unique_ptr<initialize::base> initializer_ = nullptr;
@@ -111,11 +108,15 @@ private:
     //-----------------------------------------
     // for stereo or RGBD camera model
 
-    //! Try to initialize a map with stereo or RGBD camera setup
-    bool try_initialize_for_stereo(data::frame& curr_frm);
 
-    //! Create an initial map with stereo or RGBD camera setup
-    bool create_map_for_stereo(data::frame& curr_frm);
+    //! Create an initial map by triangulating within the multi frme
+    bool createMapByTriangulate(data::MultiFrame &curr_frm);
+
+    // //! Try to initialize a map with stereo or RGBD camera setup
+    // bool try_initialize_for_stereo(data::frame& curr_frm);
+    //
+    // //! Create an initial map with stereo or RGBD camera setup
+    // bool create_map_for_stereo(data::frame& curr_frm);
 };
 
 } // namespace module

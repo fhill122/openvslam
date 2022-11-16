@@ -1,5 +1,5 @@
 #include "openvslam/config.h"
-#include "openvslam/data/keyframe.h"
+#include "openvslam/data/multi_keyframe.h"
 #include "openvslam/data/landmark.h"
 #include "openvslam/data/map_database.h"
 #include "openvslam/initialize/bearing_vector.h"
@@ -7,8 +7,14 @@
 #include "openvslam/match/area.h"
 #include "openvslam/module/initializer.h"
 #include "openvslam/optimize/global_bundle_adjuster.h"
+#include "openvslam/camera/fake_stereo.h"
+#include "openvslam/data/multi_frame.h"
 
-#include <spdlog/spdlog.h>
+#include "spdlog/spdlog.h"
+#include "ivtb/periodic_runner.h"
+#include <nanoflann/nanoflann.h>
+
+using namespace std;
 
 namespace openvslam {
 namespace module {
@@ -49,38 +55,9 @@ std::vector<int> initializer::get_initial_matches() const {
     return init_matches_;
 }
 
-unsigned int initializer::get_initial_frame_id() const {
-    return init_frm_id_;
-}
-
-bool initializer::initialize(data::frame& curr_frm) {
-    if (is_mono_){
-        // construct an initializer if not constructed
-        if (state_ == initializer_state_t::NotReady) {
-            create_initializer(curr_frm);
-            return false;
-        }
-
-        // try to initialize
-        if (!try_initialize_for_monocular(curr_frm)) {
-            // failed
-            return false;
-        }
-
-        // create new map if succeeded
-        create_map_for_monocular(curr_frm);
-    } else{
-        state_ = initializer_state_t::Initializing;
-
-        // try to initialize
-        if (!try_initialize_for_stereo(curr_frm)) {
-            // failed
-            return false;
-        }
-
-        // create new map if succeeded
-        create_map_for_stereo(curr_frm);
-    }
+bool initializer::initialize(data::MultiFrame& curr_frm) {
+    state_ = initializer_state_t::Initializing;
+    createMapByTriangulate(curr_frm);
 
     // check the state is succeeded or not
     if (state_ == initializer_state_t::Succeeded) {
@@ -92,198 +69,123 @@ bool initializer::initialize(data::frame& curr_frm) {
     }
 }
 
-void initializer::create_initializer(data::frame& curr_frm) {
-    // set the initial frame
-    init_frm_ = data::frame(curr_frm);
-
-    // initialize the previously matched coordinates
-    prev_matched_coords_.resize(init_frm_.undist_keypts_.size());
-    for (unsigned int i = 0; i < init_frm_.undist_keypts_.size(); ++i) {
-        prev_matched_coords_.at(i) = init_frm_.undist_keypts_.at(i).pt;
-    }
-
-    // initialize matchings (init_idx -> curr_idx)
-    std::fill(init_matches_.begin(), init_matches_.end(), -1);
-
-    // build a initializer
-    initializer_.reset(nullptr);
-    switch (init_frm_.camera_->model_type_) {
-        case camera::model_type_t::Perspective:
-        case camera::model_type_t::VirtualCube: // todo ivan. fix this
-        case camera::model_type_t::Fisheye:
-        case camera::model_type_t::RadialDivision: {
-            initializer_ = std::unique_ptr<initialize::perspective>(new initialize::perspective(init_frm_,
-                                                                                                num_ransac_iters_, min_num_triangulated_,
-                                                                                                parallax_deg_thr_, reproj_err_thr_,
-                                                                                                use_fixed_seed_));
-            break;
-        }
-        case camera::model_type_t::Equirectangular: {
-            initializer_ = std::unique_ptr<initialize::bearing_vector>(new initialize::bearing_vector(init_frm_,
-                                                                                                      num_ransac_iters_, min_num_triangulated_,
-                                                                                                      parallax_deg_thr_, reproj_err_thr_,
-                                                                                                      use_fixed_seed_));
-            break;
-        }
-    }
-
-    state_ = initializer_state_t::Initializing;
-}
-
-bool initializer::try_initialize_for_monocular(data::frame& curr_frm) {
+bool initializer::createMapByTriangulate(data::MultiFrame &curr_frm) {
     assert(state_ == initializer_state_t::Initializing);
 
-    match::area matcher(0.9, true);
-    const auto num_matches = matcher.match_in_consistent_area(init_frm_, curr_frm, prev_matched_coords_, init_matches_, 100);
-
-    if (num_matches < min_num_triangulated_) {
-        // rebuild the initializer with the next frame
-        reset();
-        return false;
-    }
-
-    // try to initialize with the initial frame and the current frame
-    assert(initializer_);
-    spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
-    return initializer_->initialize(curr_frm, init_matches_);
-}
-
-bool initializer::create_map_for_monocular(data::frame& curr_frm) {
-    assert(state_ == initializer_state_t::Initializing);
-
-    eigen_alloc_vector<Vec3_t> init_triangulated_pts;
-    {
-        assert(initializer_);
-        init_triangulated_pts = initializer_->get_triangulated_pts();
-        const auto is_triangulated = initializer_->get_triangulated_flags();
-
-        // make invalid the matchings which have not been triangulated
-        for (unsigned int i = 0; i < init_matches_.size(); ++i) {
-            if (init_matches_.at(i) < 0) {
-                continue;
-            }
-            if (is_triangulated.at(i)) {
-                continue;
-            }
-            init_matches_.at(i) = -1;
-        }
-
-        // set the camera poses
-        init_frm_.set_cam_pose(Mat44_t::Identity());
-        Mat44_t cam_pose_cw = Mat44_t::Identity();
-        cam_pose_cw.block<3, 3>(0, 0) = initializer_->get_rotation_ref_to_cur();
-        cam_pose_cw.block<3, 1>(0, 3) = initializer_->get_translation_ref_to_cur();
-        curr_frm.set_cam_pose(cam_pose_cw);
-
-        // destruct the initializer
-        initializer_.reset(nullptr);
-    }
-
-    // create initial keyframes
-    auto init_keyfrm = data::keyframe::make_keyframe(init_frm_, map_db_);
-    auto curr_keyfrm = data::keyframe::make_keyframe(curr_frm, map_db_);
-
-    // compute BoW representations
-    init_keyfrm->compute_bow();
-    curr_keyfrm->compute_bow();
-
-    // add the keyframes to the map DB
-    map_db_->add_keyframe(init_keyfrm);
-    map_db_->add_keyframe(curr_keyfrm);
-
-    // update the frame statistics
-    init_frm_.ref_keyfrm_ = init_keyfrm;
-    curr_frm.ref_keyfrm_ = curr_keyfrm;
-
-    // assign 2D-3D associations
-    for (unsigned int init_idx = 0; init_idx < init_matches_.size(); init_idx++) {
-        const auto curr_idx = init_matches_.at(init_idx);
-        if (curr_idx < 0) {
-            continue;
-        }
-
-        // construct a landmark
-        auto lm = std::make_shared<data::landmark>(init_triangulated_pts.at(init_idx), curr_keyfrm, map_db_);
-
-        // set the assocications to the new keyframes
-        init_keyfrm->add_landmark(lm, init_idx);
-        curr_keyfrm->add_landmark(lm, curr_idx);
-        lm->add_observation(init_keyfrm, init_idx);
-        lm->add_observation(curr_keyfrm, curr_idx);
-
-        // update the descriptor
-        lm->compute_descriptor();
-        // update the geometry
-        lm->update_normal_and_depth();
-
-        // set the 2D-3D assocications to the current frame
-        curr_frm.landmarks_.at(curr_idx) = lm;
-        curr_frm.outlier_flags_.at(curr_idx) = false;
-
-        // add the landmark to the map DB
-        map_db_->add_landmark(lm);
-    }
-
-    // global bundle adjustment
-    const auto global_bundle_adjuster = optimize::global_bundle_adjuster(map_db_, num_ba_iters_, true);
-    global_bundle_adjuster.optimize();
-
-    // scale the map so that the median of depths is 1.0
-    const auto median_depth = init_keyfrm->compute_median_depth(init_keyfrm->camera_->model_type_ == camera::model_type_t::Equirectangular);
-    const auto inv_median_depth = 1.0 / median_depth;
-    if (curr_keyfrm->get_num_tracked_landmarks(1) < min_num_triangulated_ && median_depth < 0) {
-        spdlog::info("seems to be wrong initialization, resetting");
-        state_ = initializer_state_t::Wrong;
-        return false;
-    }
-    scale_map(init_keyfrm, curr_keyfrm, inv_median_depth * scaling_factor_);
-
-    // update the current frame pose
-    curr_frm.set_cam_pose(curr_keyfrm->get_cam_pose());
-
-    // set the origin keyframe
-    map_db_->origin_keyfrm_ = init_keyfrm;
-
-    spdlog::info("new map created with {} points: frame {} - frame {}", map_db_->get_num_landmarks(), init_frm_.id_, curr_frm.id_);
-    state_ = initializer_state_t::Succeeded;
-    return true;
-}
-
-void initializer::scale_map(const std::shared_ptr<data::keyframe>& init_keyfrm, const std::shared_ptr<data::keyframe>& curr_keyfrm, const double scale) {
-    // scaling keyframes
-    Mat44_t cam_pose_cw = curr_keyfrm->get_cam_pose();
-    cam_pose_cw.block<3, 1>(0, 3) *= scale;
-    curr_keyfrm->set_cam_pose(cam_pose_cw);
-
-    // scaling landmarks
-    const auto landmarks = init_keyfrm->get_landmarks();
-    for (const auto& lm : landmarks) {
-        if (!lm) {
-            continue;
-        }
-        lm->set_pos_in_world(lm->get_pos_in_world() * scale);
-    }
-}
-
-bool initializer::try_initialize_for_stereo(data::frame& curr_frm) {
-    assert(state_ == initializer_state_t::Initializing);
-    // count the number of valid depths
-    unsigned int num_valid_depths = std::count_if(curr_frm.depths_.begin(), curr_frm.depths_.end(),
-                                                  [](const float depth) {
-                                                      return 0 < depth;
-                                                  });
-    return min_num_triangulated_ <= num_valid_depths;
-}
-
-bool initializer::create_map_for_stereo(data::frame& curr_frm) {
-    assert(state_ == initializer_state_t::Initializing);
-
-    // create an initial keyframe
+    // create keyframe
     curr_frm.set_cam_pose(Mat44_t::Identity());
-    auto curr_keyfrm = data::keyframe::make_keyframe(curr_frm, map_db_);
+    auto curr_keyfrm = data::MultiKeyframe::Create(curr_frm, map_db_);
+
+    vector<shared_ptr<data::landmark>> new_lms;
+    new_lms.reserve(curr_frm.getNumKeypts());
+    for (int i=0; i<curr_frm.size(); ++i){
+        for (int j = 0; j < curr_frm.rig->overlaps[i].size(); ++j) {
+            const auto &overlap = curr_frm.rig->overlaps[i][j];
+            AssertLog(i==overlap.ind1, "");
+            const cv::Mat& mask = overlap.mask;
+            const auto& frame_1 = curr_frm[overlap.ind1];
+            const auto& frame_2 = curr_frm[overlap.ind2];
+            const auto& kf_1 = curr_keyfrm->at(overlap.ind1);
+            const auto& kf_2 = curr_keyfrm->at(overlap.ind2);
+
+            // filter by overlap
+            vector<cv::Point2f> keypts_1;
+            eigen_alloc_vector<Vec3_t> bearings_1;
+            vector<int> indices_1;
+            keypts_1.reserve(frame_1->num_keypts_);
+            bearings_1.reserve(frame_1->num_keypts_);
+            indices_1.reserve(frame_1->num_keypts_);
+            for (int k=0; k< frame_1->num_keypts_; ++k){
+                if (mask.at<unsigned char>(
+                        (int)round(frame_1->keypts_[k].pt.y), (int)round(frame_1->keypts_[k].pt.x)) >0 ){
+                    keypts_1.push_back(frame_1->keypts_[k].pt);
+                    bearings_1.push_back(frame_1->bearings_[k]);
+                    indices_1.push_back(k);
+                }
+            }
+
+            // triangulate, and count num
+            vector<cv::Point2f> keypts_2;
+            vector<cv::Point3f> pts3d;
+            Eigen::Matrix4d T_2_1 = curr_frm.rig->poses[overlap.ind2] * curr_frm.rig->poses_inv[overlap.ind1];
+            FakeStereo::FindStereo(frame_1->img_, frame_2->img_, keypts_1, bearings_1,
+                                   T_2_1.block<3,3>(0,0), T_2_1.block<3,1>(0,3),
+                                   curr_frm.rig->cameras[overlap.ind1].get(),
+                                   curr_frm.rig->cameras[overlap.ind2].get(),
+                                   pts3d, keypts_2);
+            AssertLog(pts3d.size() == keypts_1.size(), "");
+            AssertLog(pts3d.size() == keypts_2.size(), "");
+
+            // relates to exist orb keypoints
+            constexpr float kRadiusSqr = 6;
+            vector<int> matched_ind;
+            matched_ind.resize(keypts_1.size());
+            for (int k =0; k <keypts_1.size(); ++k){
+                const int ind_1 = indices_1[k];
+
+                if (keypts_2[k].x==-1 && keypts_2[k].y==-1){
+                    matched_ind[k] = -1;
+                    continue ;
+                }
+
+                // search near lk result
+                vector<pair<int,float>> near_kpts = frame_2->radiusSearch(keypts_2[k].x, keypts_2[k].y, kRadiusSqr);
+                if (near_kpts.empty()){
+                    matched_ind[k] = -1;
+                    continue ;
+                }
+
+                // only check the best distance here
+                unsigned int best_hamm_dist = (match::HAMMING_DIST_THR_HIGH + match::HAMMING_DIST_THR_LOW) / 2;
+                int best_ind = -1;
+                for (auto ind_dist : near_kpts){
+                    unsigned int dist = match::compute_descriptor_distance_32(
+                                frame_1->descriptors_.row(ind_1), frame_2->descriptors_.row(ind_dist.first) );
+                    if (dist < best_hamm_dist){
+                        best_ind = ind_dist.first;
+                        best_hamm_dist = dist;
+                    }
+                }
+                matched_ind[k] = best_ind;
+
+                if (best_ind>0){
+                    // build a landmark, note body collides with world frame now
+                    const Vec4_t pos_f1{pts3d[k].x, pts3d[k].y, pts3d[k].z, 1};
+                    const Vec4_t pos_w = curr_frm.rig->poses_inv[overlap.ind1] * pos_f1;
+                    auto lm = shared_ptr<data::landmark>(new data::landmark({pos_w.x(), pos_w.y(), pos_w.z()},
+                                                             kf_1, map_db_));
+                    RUN_N_TIMES(20,spdlog::debug("added a lm ({},{},{})", pts3d[k].x, pts3d[k].y, pts3d[k].z));
+
+                    // set the associations to the new keyframe
+                    lm->add_observation(kf_1, ind_1);
+                    lm->add_observation(kf_2, best_ind);
+                    kf_1->add_landmark(lm, ind_1);
+                    kf_2->add_landmark(lm, best_ind);
+
+                    // update the descriptor
+                    lm->compute_descriptor();
+                    // update the geometry
+                    lm->update_normal_and_depth();
+
+                    // set the 2D-3D associations to the current frame
+                    frame_1->landmarks_.at(ind_1) = lm;
+                    frame_2->landmarks_.at(best_ind) = lm;
+
+                    new_lms.push_back(lm);
+                }
+            }
+
+        }
+    }
+
+    if (new_lms.size()<min_num_triangulated_){
+        spdlog::warn("insufficient 3d points for initialization: {} vs {}", new_lms.size(), min_num_triangulated_);
+        return false;
+    }
 
     // compute BoW representation
-    curr_keyfrm->compute_bow();
+    for (auto &kf : curr_keyfrm->frames)
+        kf->compute_bow();
 
     // add to the map DB
     map_db_->add_keyframe(curr_keyfrm);
@@ -291,41 +193,81 @@ bool initializer::create_map_for_stereo(data::frame& curr_frm) {
     // update the frame statistics
     curr_frm.ref_keyfrm_ = curr_keyfrm;
 
-    for (unsigned int idx = 0; idx < curr_frm.num_keypts_; ++idx) {
-        // add a new landmark if tht corresponding depth is valid
-        const auto z = curr_frm.depths_.at(idx);
-        if (z <= 0) {
-            continue;
-        }
 
-        // build a landmark
-        const Vec3_t pos_w = curr_frm.triangulate_stereo(idx);
-        auto lm = std::make_shared<data::landmark>(pos_w, curr_keyfrm, map_db_);
-
-        // set the associations to the new keyframe
-        lm->add_observation(curr_keyfrm, idx);
-        curr_keyfrm->add_landmark(lm, idx);
-
-        // update the descriptor
-        lm->compute_descriptor();
-        // update the geometry
-        lm->update_normal_and_depth();
-
-        // set the 2D-3D associations to the current frame
-        curr_frm.landmarks_.at(idx) = lm;
-        curr_frm.outlier_flags_.at(idx) = false;
-
-        // add the landmark to the map DB
+    // add the landmark to the map DB
+    for (const auto& lm : new_lms){
         map_db_->add_landmark(lm);
     }
 
-    // set the origin keyframe
     map_db_->origin_keyfrm_ = curr_keyfrm;
 
     spdlog::info("new map created with {} points: frame {}", map_db_->get_num_landmarks(), curr_frm.id_);
     state_ = initializer_state_t::Succeeded;
     return true;
 }
+
+// bool initializer::try_initialize_for_stereo(data::frame& curr_frm) {
+//     assert(state_ == initializer_state_t::Initializing);
+//     // count the number of valid depths
+//     unsigned int num_valid_depths = std::count_if(curr_frm.depths_.begin(), curr_frm.depths_.end(),
+//                                                   [](const float depth) {
+//                                                       return 0 < depth;
+//                                                   });
+//     return min_num_triangulated_ <= num_valid_depths;
+// }
+//
+// bool initializer::create_map_for_stereo(data::frame& curr_frm) {
+//     assert(state_ == initializer_state_t::Initializing);
+//
+//     // create an initial keyframe
+//     curr_frm.set_cam_pose(Mat44_t::Identity());
+//     auto curr_keyfrm = data::keyframe::make_keyframe(curr_frm, map_db_);
+//
+//     // compute BoW representation
+//     curr_keyfrm->compute_bow();
+//
+//     // add to the map DB
+//     map_db_->add_keyframe(curr_keyfrm);
+//
+//     // update the frame statistics
+//     curr_frm.ref_keyfrm_ = curr_keyfrm;
+//
+//     for (unsigned int idx = 0; idx < curr_frm.num_keypts_; ++idx) {
+//         // add a new landmark if tht corresponding depth is valid
+//         const auto z = curr_frm.depths_.at(idx);
+//         if (z <= 0) {
+//             continue;
+//         }
+//
+//         // build a landmark
+//         const Vec3_t pos_w = curr_frm.triangulate_stereo(idx);
+//         // [ivan] have to use eigen allocator
+//         auto lm = std::make_shared<data::landmark>(pos_w, curr_keyfrm, map_db_);
+//
+//         // set the associations to the new keyframe
+//         lm->add_observation(curr_keyfrm, idx);
+//         curr_keyfrm->add_landmark(lm, idx);
+//
+//         // update the descriptor
+//         lm->compute_descriptor();
+//         // update the geometry
+//         lm->update_normal_and_depth();
+//
+//         // set the 2D-3D associations to the current frame
+//         curr_frm.landmarks_.at(idx) = lm;
+//         curr_frm.outlier_flags_.at(idx) = false;
+//
+//         // add the landmark to the map DB
+//         map_db_->add_landmark(lm);
+//     }
+//
+//     // set the origin keyframe
+//     map_db_->origin_keyfrm_ = curr_keyfrm;
+//
+//     spdlog::info("new map created with {} points: frame {}", map_db_->get_num_landmarks(), curr_frm.id_);
+//     state_ = initializer_state_t::Succeeded;
+//     return true;
+// }
 
 } // namespace module
 } // namespace openvslam

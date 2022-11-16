@@ -19,7 +19,7 @@ class base;
 namespace data {
 
 class frame;
-class keyframe;
+class MultiKeyframe;
 class landmark;
 class camera_database;
 
@@ -39,13 +39,13 @@ public:
      * Add keyframe to the database
      * @param keyfrm
      */
-    void add_keyframe(const std::shared_ptr<keyframe>& keyfrm);
+    void add_keyframe(const std::shared_ptr<MultiKeyframe>& keyfrm);
 
     /**
      * Add landmark to the database
      * @param lm
      */
-    void add_landmark(std::shared_ptr<landmark>& lm);
+    void add_landmark(const std::shared_ptr<landmark>& lm);
 
     /**
      * Erase landmark from the database
@@ -65,17 +65,17 @@ public:
      */
     std::vector<std::shared_ptr<landmark>> get_local_landmarks() const;
 
-    std::shared_ptr<keyframe> getKeyframe(std::uint32_t id) const{
+    std::shared_ptr<MultiKeyframe> getKeyframe(std::uint32_t id) const{
         std::lock_guard<std::mutex> lock(mtx_map_access_);
         auto itr = keyframes_.find(id);
         return itr==keyframes_.end()? nullptr : itr->second;
     }
 
     template< template <class, class...> class ContainerT>
-    ContainerT<std::shared_ptr<data::keyframe>> getKeyframes(int id_start, int id_end) const{
+    ContainerT<std::shared_ptr<data::MultiKeyframe>> getKeyframes(int id_start, int id_end) const{
         CV_Assert(id_end>id_start);
         id_start = std::max(0, id_start);
-        ContainerT<std::shared_ptr<data::keyframe>> out;
+        ContainerT<std::shared_ptr<data::MultiKeyframe>> out;
         out.reserve(id_end-id_start);
         std::lock_guard<std::mutex> lock(mtx_map_access_);
         for (auto i = id_start; i < id_end; ++i) {
@@ -89,7 +89,7 @@ public:
      * Get all of the keyframes in the database
      * @return
      */
-    std::vector<std::shared_ptr<keyframe>> get_all_keyframes() const;
+    std::vector<std::shared_ptr<MultiKeyframe>> get_all_keyframes() const;
 
     /**
      * Get the number of keyframes
@@ -115,7 +115,7 @@ public:
     void clear();
 
     //! origin keyframe
-    std::shared_ptr<keyframe> origin_keyfrm_ = nullptr;
+    std::shared_ptr<MultiKeyframe> origin_keyfrm_ = nullptr;
 
     //! mutex for locking ALL access to the database
     //! (NOTE: cannot used in map_database class)
@@ -129,7 +129,7 @@ private:
     // keyframe and landmark database
 
     //! IDs and keyframes
-    std::unordered_map<unsigned int, std::shared_ptr<keyframe>> keyframes_;
+    std::unordered_map<unsigned int, std::shared_ptr<MultiKeyframe>> keyframes_;
     //! IDs and landmarks
     std::unordered_map<unsigned int, std::shared_ptr<landmark>> landmarks_;
 

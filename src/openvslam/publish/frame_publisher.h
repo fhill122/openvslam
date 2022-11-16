@@ -43,7 +43,7 @@ public:
      * Get the current image with tracking information
      * NOTE: should be accessed from viewer thread
      */
-    cv::Mat draw_frame(const bool draw_text = true);
+    cv::Mat draw_frame(int ind, bool draw_text = true);
 
 protected:
     unsigned int draw_initial_points(cv::Mat& img, const std::vector<cv::KeyPoint>& init_keypts,
@@ -51,15 +51,14 @@ protected:
                                      const float mag = 1.0) const;
 
     unsigned int draw_tracked_points(cv::Mat& img, const std::vector<cv::KeyPoint>& curr_keypts,
-                                     const std::vector<bool>& is_tracked, const bool mapping_is_enabled,
+                                     const std::vector<bool>& is_tracked,
                                      const float mag = 1.0) const;
 
     void draw_info_text(cv::Mat& img, const tracker_state_t tracking_state, const unsigned int num_tracked,
-                        const double elapsed_ms, const bool mapping_is_enabled) const;
+                        const double elapsed_ms) const;
 
     // colors (BGR)
     const cv::Scalar mapping_color_{0, 255, 255};
-    const cv::Scalar localization_color_{255, 255, 0};
 
     //! config
     std::shared_ptr<config> cfg_;
@@ -73,7 +72,7 @@ protected:
     std::mutex mtx_;
 
     //! raw img
-    cv::Mat img_;
+    std::vector<cv::Mat> imgs_;
     //! tracking state
     tracker_state_t tracking_state_;
 
@@ -83,16 +82,13 @@ protected:
     std::vector<int> init_matches_;
 
     //! current keypoints
-    std::vector<cv::KeyPoint> curr_keypts_;
+    std::vector<std::vector<cv::KeyPoint>> curr_keypts_;
 
     //! elapsed time for tracking
     double elapsed_ms_ = 0.0;
 
-    //! mapping module status
-    bool mapping_is_enabled_;
-
     //! tracking flag for each current keypoint
-    std::vector<bool> is_tracked_;
+    std::vector<std::vector<bool>> is_tracked_;
 };
 
 } // namespace publish

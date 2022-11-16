@@ -1,6 +1,6 @@
 #include "openvslam/type.h"
 #include "openvslam/mapping_module.h"
-#include "openvslam/data/keyframe.h"
+#include "openvslam/data/multi_keyframe.h"
 #include "openvslam/data/landmark.h"
 #include "openvslam/data/map_database.h"
 #include "openvslam/match/fuse.h"
@@ -107,7 +107,7 @@ void mapping_module::run() {
     spdlog::info("terminate mapping module");
 }
 
-void mapping_module::queue_keyframe(const std::shared_ptr<data::keyframe>& keyfrm) {
+void mapping_module::queue_keyframe(const std::shared_ptr<data::MultiKeyframe>& keyfrm) {
     std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
     keyfrms_queue_.push_back(keyfrm);
     abort_local_BA_ = true;
@@ -144,14 +144,16 @@ void mapping_module::mapping_with_new_keyframe() {
         keyfrms_queue_.pop_front();
     }
 
-    // set the origin keyframe
-    local_map_cleaner_->set_origin_keyframe_id(map_db_->origin_keyfrm_->id_);
-
     // store the new keyframe to the database
     store_new_keyframe();
 
     // remove redundant landmarks
-    local_map_cleaner_->remove_redundant_landmarks(cur_keyfrm_->id_, cur_keyfrm_->depth_is_avaliable());
+    local_map_cleaner_->remove_redundant_landmarks(cur_keyfrm_->id_, false);
+
+    // todo [ivan] this logic is not proper:
+    //  currently do at least 1 triangulation, then new kf can interrupt both triangulation and ba.
+    //  if triangulation takes too long, ba never got chance to run
+    //  should triangulate at least n keyframes, do optimization m times (if still needed), repeat...
 
     // triangulate new landmarks between the current frame and each of the covisibilities
     create_new_landmarks();
@@ -160,6 +162,7 @@ void mapping_module::mapping_with_new_keyframe() {
         return;
     }
 
+    // todo [ivan] bench
     // detect and resolve the duplication of the landmarks observed in the current frame
     update_new_keyframe();
 
@@ -176,32 +179,36 @@ void mapping_module::mapping_with_new_keyframe() {
 
 void mapping_module::store_new_keyframe() {
     // compute BoW feature vector
-    cur_keyfrm_->compute_bow();
+    for(auto &kf : cur_keyfrm_->frames) {
+        kf->compute_bow();
 
-    // update graph
-    const auto cur_lms = cur_keyfrm_->get_landmarks();
-    for (unsigned int idx = 0; idx < cur_lms.size(); ++idx) {
-        auto lm = cur_lms.at(idx);
-        if (!lm) {
-            continue;
-        }
-        if (lm->will_be_erased()) {
-            continue;
-        }
+        // update graph
+        const auto cur_lms = kf->get_landmarks();
+        for (unsigned int idx = 0; idx < cur_lms.size(); ++idx) {
+            auto lm = cur_lms.at(idx);
+            if (!lm) {
+                continue;
+            }
+            if (lm->will_be_erased()) {
+                continue;
+            }
 
-        // if `lm` does not have the observation information from `cur_keyfrm_`,
-        // add the association between the keyframe and the landmark
-        if (lm->is_observed_in_keyframe(cur_keyfrm_)) {
-            // if `lm` is correctly observed, make it be checked by the local map cleaner
-            local_map_cleaner_->add_fresh_landmark(lm);
-            continue;
-        }
+            // todo [ivan] check this. keyframe just created, how come lm would ever have observation of curr_keyfrm_?!
+            // if `lm` does not have the observation information from `cur_keyfrm_`,
+            // add the association between the keyframe and the landmark
+            if (lm->is_observed_in_keyframe(kf)) {
+                AssertLog(false, "checking, this should never happen");
+                // if `lm` is correctly observed, make it be checked by the local map cleaner
+                local_map_cleaner_->add_fresh_landmark(lm);
+                continue;
+            }
 
-        // update connection
-        lm->add_observation(cur_keyfrm_, idx);
-        // update geometry
-        lm->update_normal_and_depth();
-        lm->compute_descriptor();
+            // update connection
+            lm->add_observation(kf, idx);
+            // update geometry
+            lm->update_normal_and_depth();
+            lm->compute_descriptor();
+        }
     }
 
     // store the new keyframe to the map database
@@ -213,11 +220,9 @@ void mapping_module::create_new_landmarks() {
     // lowe's_ratio will not be used
     match::robust robust_matcher(0.0, false);
 
-    // camera center of the current keyframe
-    const Vec3_t cur_cam_center = cur_keyfrm_->get_cam_center();
 
     for (unsigned int i = 0; i < kNumNeighbor; ++i) {
-        // if any keyframe is queued, abort the triangulation
+        // if any keyframe is queued and we have done 1 triangulation, abort
         if (1 < i && keyframe_is_queued()) {
             return;
         }
@@ -226,40 +231,46 @@ void mapping_module::create_new_landmarks() {
         auto ngh_keyfrm = map_db_->getKeyframe(cur_keyfrm_->id_-i);
         if (!ngh_keyfrm) return ;
 
-        // camera center of the neighbor keyframe
-        const Vec3_t ngh_cam_center = ngh_keyfrm->get_cam_center();
+        // todo [ivan] should we allow cross camera triangulation? not doing here
+        for (int j=0; j<cur_keyfrm_->frames.size(); ++j){
+            // camera center of the current keyframe
+            const Vec3_t cur_cam_center = cur_keyfrm_->at(j)->get_cam_center();
+            // camera center of the neighbor keyframe
+            const Vec3_t ngh_cam_center = ngh_keyfrm->at(j)->get_cam_center();
 
-        // compute the baseline between the current and neighbor keyframes
-        const Vec3_t baseline_vec = ngh_cam_center - cur_cam_center;
-        const auto baseline_dist = baseline_vec.norm();
+            // compute the baseline between the current and neighbor keyframes
+            const Vec3_t baseline_vec = ngh_cam_center - cur_cam_center;
+            const auto baseline_dist = baseline_vec.norm();
 
-        // if the scene scale is much smaller than the baseline, abort the triangulation
-        if (use_baseline_dist_thr_ratio_) {
-            const float median_depth_in_ngh = ngh_keyfrm->compute_median_depth(true);
-            if (baseline_dist < baseline_dist_thr_ratio_ * median_depth_in_ngh) {
-                continue;
+            // if the scene scale is much smaller than the baseline, abort the triangulation
+            if (use_baseline_dist_thr_ratio_) {
+                const float median_depth_in_ngh = ngh_keyfrm->frames[j]->compute_median_depth(true);
+                if (baseline_dist < baseline_dist_thr_ratio_ * median_depth_in_ngh) {
+                    continue;
+                }
             }
-        }
-        else {
-            if (baseline_dist < baseline_dist_thr_) {
-                continue;
+            else {
+                if (baseline_dist < baseline_dist_thr_) {
+                    continue;
+                }
             }
+
+            // estimate matches between the current and neighbor keyframes,
+            // then reject outliers using Essential matrix computed from the two camera poses
+
+            // (cur bearing) * E_ngh_to_cur * (ngh bearing) = 0
+            // const Mat33_t E_ngh_to_cur = solve::essential_solver::create_E_21(ngh_keyfrm, cur_keyfrm_);
+            const Mat33_t E_ngh_to_cur = solve::essential_solver::create_E_21(
+                                    ngh_keyfrm->at(j)->get_rotation(), ngh_keyfrm->at(j)->get_translation(),
+                                    cur_keyfrm_->at(j)->get_rotation(), cur_keyfrm_->at(j)->get_translation());
+
+            // vector of matches (idx in the current, idx in the neighbor)
+            std::vector<std::pair<unsigned int, unsigned int>> matches;
+            robust_matcher.match_for_triangulation(cur_keyfrm_->at(j), ngh_keyfrm->at(j), E_ngh_to_cur, matches);
+
+            // triangulation
+            triangulate_with_two_keyframes(cur_keyfrm_->at(j), ngh_keyfrm->at(j), matches);
         }
-
-        // estimate matches between the current and neighbor keyframes,
-        // then reject outliers using Essential matrix computed from the two camera poses
-
-        // (cur bearing) * E_ngh_to_cur * (ngh bearing) = 0
-        // const Mat33_t E_ngh_to_cur = solve::essential_solver::create_E_21(ngh_keyfrm, cur_keyfrm_);
-        const Mat33_t E_ngh_to_cur = solve::essential_solver::create_E_21(ngh_keyfrm->get_rotation(), ngh_keyfrm->get_translation(),
-                                                                          cur_keyfrm_->get_rotation(), cur_keyfrm_->get_translation());
-
-        // vector of matches (idx in the current, idx in the neighbor)
-        std::vector<std::pair<unsigned int, unsigned int>> matches;
-        robust_matcher.match_for_triangulation(cur_keyfrm_, ngh_keyfrm, E_ngh_to_cur, matches);
-
-        // triangulation
-        triangulate_with_two_keyframes(cur_keyfrm_, ngh_keyfrm, matches);
     }
 }
 
@@ -307,27 +318,36 @@ void mapping_module::triangulate_with_two_keyframes(const std::shared_ptr<data::
 
 void mapping_module::update_new_keyframe() {
     // get the targets to check landmark fusion
-    const auto fuse_tgt_keyfrms = map_db_->getKeyframes<unordered_set>(cur_keyfrm_->id_-10, cur_keyfrm_->id_);
+    const auto fuse_tgt_mkeyfrms = map_db_->getKeyframes<unordered_set>(cur_keyfrm_->id_-10, cur_keyfrm_->id_);
+    // todo [ivan] use raw pointer
+    vector<shared_ptr<data::keyframe>> fuse_tgt_keyfrms;
+    fuse_tgt_keyfrms.reserve(fuse_tgt_mkeyfrms.size() * cur_keyfrm_->size());
+    for (auto &mkf : fuse_tgt_mkeyfrms){
+        fuse_tgt_keyfrms.insert(fuse_tgt_keyfrms.end(), mkf->frames.begin(), mkf->frames.end());
+    }
 
-    // resolve the duplication of landmarks between the current keyframe and the targets
-    fuse_landmark_duplication(fuse_tgt_keyfrms);
+    for (const auto &kf : cur_keyfrm_->frames){
+        // resolve the duplication of landmarks between the current keyframe and the targets
+        fuse_landmark_duplication(kf, fuse_tgt_keyfrms);
 
-    // update the geometries
-    const auto cur_landmarks = cur_keyfrm_->get_landmarks();
-    for (const auto& lm : cur_landmarks) {
-        if (!lm) {
-            continue;
+        // update the geometries
+        const auto cur_landmarks = kf->get_landmarks();
+        for (const auto& lm : cur_landmarks) {
+            if (!lm) {
+                continue;
+            }
+            if (lm->will_be_erased()) {
+                continue;
+            }
+            lm->compute_descriptor();
+            lm->update_normal_and_depth();
         }
-        if (lm->will_be_erased()) {
-            continue;
-        }
-        lm->compute_descriptor();
-        lm->update_normal_and_depth();
     }
 }
 
-
-void mapping_module::fuse_landmark_duplication(const std::unordered_set<std::shared_ptr<data::keyframe>>& fuse_tgt_keyfrms) {
+template < template<typename , typename...> typename Container, typename... ContainerParams>
+void mapping_module::fuse_landmark_duplication(const std::shared_ptr<data::keyframe> &cur_keyfrm,
+                   const Container<std::shared_ptr<data::keyframe>, ContainerParams...>& fuse_tgt_keyfrms) {
     match::fuse matcher;
 
     {
@@ -335,7 +355,7 @@ void mapping_module::fuse_landmark_duplication(const std::unordered_set<std::sha
         // - additional matches
         // - duplication of matches
         // then, add matches and solve duplication
-        auto cur_landmarks = cur_keyfrm_->get_landmarks();
+        auto cur_landmarks = cur_keyfrm->get_landmarks();
         for (const auto& fuse_tgt_keyfrm : fuse_tgt_keyfrms) {
             matcher.replace_duplication(fuse_tgt_keyfrm, cur_landmarks);
         }
@@ -348,7 +368,7 @@ void mapping_module::fuse_landmark_duplication(const std::unordered_set<std::sha
         // - duplication of matches
         // then, add matches and solve duplication
         std::unordered_set<std::shared_ptr<data::landmark>> candidate_landmarks_to_fuse;
-        candidate_landmarks_to_fuse.reserve(fuse_tgt_keyfrms.size() * cur_keyfrm_->num_keypts_);
+        candidate_landmarks_to_fuse.reserve(fuse_tgt_keyfrms.size() * cur_keyfrm->num_keypts_);
 
         for (const auto& fuse_tgt_keyfrm : fuse_tgt_keyfrms) {
             const auto fuse_tgt_landmarks = fuse_tgt_keyfrm->get_landmarks();
@@ -368,7 +388,7 @@ void mapping_module::fuse_landmark_duplication(const std::unordered_set<std::sha
             }
         }
 
-        matcher.replace_duplication(cur_keyfrm_, candidate_landmarks_to_fuse);
+        matcher.replace_duplication(cur_keyfrm, candidate_landmarks_to_fuse);
     }
 }
 
@@ -476,5 +496,8 @@ void mapping_module::terminate() {
     is_paused_ = true;
     is_terminated_ = true;
 }
+
+template void mapping_module::fuse_landmark_duplication(const std::shared_ptr<data::keyframe> &cur_keyfrm,
+                                               const vector<std::shared_ptr<data::keyframe>>& fuse_tgt_keyfrms);
 
 } // namespace openvslam

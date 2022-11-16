@@ -24,14 +24,7 @@ public:
      * Destructor
      */
     ~local_map_cleaner() = default;
-
-    /**
-     * Set the origin keyframe ID
-     */
-    void set_origin_keyframe_id(const unsigned int id) {
-        origin_keyfrm_id_ = id;
-    }
-
+    
     /**
      * Add fresh landmark to check their redundancy
      */
@@ -52,9 +45,6 @@ public:
 private:
     //!
     double redundant_obs_ratio_thr_;
-
-    //! origin keyframe ID
-    unsigned int origin_keyfrm_id_ = 0;
 
     //! fresh landmarks to check their redundancy
     std::list<std::shared_ptr<data::landmark>> fresh_landmarks_;

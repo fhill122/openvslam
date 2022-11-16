@@ -145,8 +145,8 @@ bool perspective::reproject_to_image(const Mat33_t& rot_cw, const Vec3_t& trans_
     x_right = reproj(0) - focal_x_baseline_ * z_inv;
 
     // check if the point is visible
-    return (img_bounds_.min_x_ < reproj(0) && reproj(0) < img_bounds_.max_x_
-            && img_bounds_.min_y_ < reproj(1) && reproj(1) < img_bounds_.max_y_);
+    return (img_bounds_.min_x_ <= reproj(0) && reproj(0) < img_bounds_.max_x_
+            && img_bounds_.min_y_ <= reproj(1) && reproj(1) < img_bounds_.max_y_);
 }
 
 bool perspective::reproject_to_bearing(const Mat33_t& rot_cw, const Vec3_t& trans_cw, const Vec3_t& pos_w, Vec3_t& reproj) const {

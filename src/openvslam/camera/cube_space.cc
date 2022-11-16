@@ -16,7 +16,7 @@ namespace camera {
 CubeSpace::CubeSpace(const string& name, setup_type_t setup_type, const color_order_t& color_order,
                      const unsigned int size, const double fps,
                      const double baseline, std::unique_ptr<base> pimpl):
-        base(name, setup_type, model_type_t::VirtualCube, color_order, size, size, fps,
+        base(name, setup_type, model_type_t::VirtualCube, color_order, pimpl->cols_, pimpl->rows_, fps,
            0.5*size*baseline, baseline), pimpl_(move(pimpl)),
         f_(0.5*size), c_(0.5*size), f_inv_(1.0/f_), size_(size){
     img_bounds_ = compute_image_bounds();

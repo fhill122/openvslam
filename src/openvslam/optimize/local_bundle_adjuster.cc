@@ -1,4 +1,4 @@
-#include "openvslam/data/keyframe.h"
+#include "openvslam/data/multi_keyframe.h"
 #include "openvslam/data/landmark.h"
 #include "openvslam/data/map_database.h"
 #include "openvslam/optimize/local_bundle_adjuster.h"
@@ -28,16 +28,17 @@ local_bundle_adjuster::local_bundle_adjuster(const unsigned int num_first_iter,
                                              const unsigned int num_second_iter)
     : num_first_iter_(num_first_iter), num_second_iter_(num_second_iter) {}
 
-void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
+void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::MultiKeyframe>& curr_keyfrm,
+                                     bool* const force_stop_flag) const {
     constexpr int kWindow = 60;
 
     // 1. Aggregate the local and fixed keyframes, and local landmarks
 
     // Correct the local keyframes of the current keyframe
-    std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> local_keyfrms;
+    std::unordered_map<unsigned int, std::shared_ptr<data::MultiKeyframe>> local_keyfrms;
 
     local_keyfrms[curr_keyfrm->id_] = curr_keyfrm;
-    const auto curr_covisibilities = curr_keyfrm->map_db_->getKeyframes<vector>(
+    const auto curr_covisibilities = curr_keyfrm->at(0)->map_db_->getKeyframes<vector>(
                                             curr_keyfrm->id_-kWindow, curr_keyfrm->id_);
     for (const auto& local_keyfrm : curr_covisibilities) {
         if (!local_keyfrm) {
@@ -51,34 +52,39 @@ void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyf
     std::unordered_map<unsigned int, std::shared_ptr<data::landmark>> local_lms;
 
     for (const auto& local_keyfrm : local_keyfrms) {
-        const auto landmarks = local_keyfrm.second->get_landmarks();
-        for (const auto& local_lm : landmarks) {
-            if (!local_lm) {
-                continue;
-            }
-            if (local_lm->will_be_erased()) {
-                continue;
-            }
+        for (const auto &kf : local_keyfrm.second->frames){
+            const auto landmarks = kf->get_landmarks();
+            for (const auto& local_lm : landmarks) {
+                if (!local_lm) {
+                    continue;
+                }
+                if (local_lm->will_be_erased()) {
+                    continue;
+                }
 
-            // Avoid duplication
-            if (local_lms.count(local_lm->id_)) {
-                continue;
-            }
+                // Avoid duplication
+                // note [ivan] how would that help? search is done already with count
+                if (local_lms.count(local_lm->id_)) {
+                    continue;
+                }
 
-            local_lms[local_lm->id_] = local_lm;
+                local_lms[local_lm->id_] = local_lm;
+            }
         }
     }
 
     // Fixed keyframes: keyframes which observe local landmarks but which are NOT in local keyframes
-    std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> fixed_keyfrms;
+    std::unordered_map<unsigned int, std::shared_ptr<data::MultiKeyframe>> fixed_keyfrms;
 
     for (const auto& local_lm : local_lms) {
         const auto observations = local_lm.second->get_observations();
         for (const auto& obs : observations) {
-            const auto fixed_keyfrm = obs.first.lock();
-            if (!fixed_keyfrm) {
+            const shared_ptr<data::keyframe> fixed_keyfrm_s = obs.first.lock();
+            if (!fixed_keyfrm_s) {
                 continue;
             }
+
+            shared_ptr<data::MultiKeyframe> fixed_keyfrm = fixed_keyfrm_s->parent_->shared_from_this();
 
             // Do not add if it's in the local keyframes
             if (local_keyfrms.count(fixed_keyfrm->id_)) {
@@ -113,7 +119,7 @@ void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyf
     auto vtx_id_offset = std::make_shared<unsigned int>(0);
     internal::se3::shot_vertex_container keyfrm_vtx_container(vtx_id_offset, local_keyfrms.size() + fixed_keyfrms.size());
     // Save the converted keyframes
-    std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> all_keyfrms;
+    std::unordered_map<unsigned int, std::shared_ptr<data::MultiKeyframe>> all_keyfrms;
 
     // Set the local keyframes to the optimizer
     for (const auto& id_local_keyfrm_pair : local_keyfrms) {
@@ -160,34 +166,33 @@ void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyf
 
         const auto observations = local_lm->get_observations();
         for (const auto& obs : observations) {
-            const auto keyfrm = obs.first.lock();
+            const shared_ptr<data::keyframe> keyfrm = obs.first.lock();
             auto idx = obs.second;
             if (!keyfrm) {
                 continue;
             }
+            shared_ptr<data::MultiKeyframe> keyfrm_m = keyfrm->parent_->shared_from_this();
 
-            const auto keyfrm_vtx = keyfrm_vtx_container.get_vertex(keyfrm);
-            const auto& undist_keypt = keyfrm->undist_keypts_.at(idx);
+            internal::se3::shot_vertex* keyfrm_vtx = keyfrm_vtx_container.get_vertex(keyfrm_m);
+            const cv::KeyPoint& undist_keypt = keyfrm->undist_keypts_.at(idx);
             const float x_right = keyfrm->stereo_x_right_.at(idx);
             const float inv_sigma_sq = keyfrm->inv_level_sigma_sq_.at(undist_keypt.octave);
             const auto sqrt_chi_sq = (keyfrm->camera_->setup_type_ == camera::setup_type_t::Monocular)
                                          ? sqrt_chi_sq_2D
                                          : sqrt_chi_sq_3D;
 
-            if (keyfrm->camera_->model_type_==camera::model_type_t::VirtualCube){
-                const auto& cube_point = keyfrm->cube_keypts_.at(idx);
-                auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, local_lm, lm_vtx,
-                                                            idx, cube_point.u, cube_point.v, x_right,
-                                                            inv_sigma_sq, sqrt_chi_sq, true , cube_point.face);
-                reproj_edge_wraps.push_back(reproj_edge_wrap);
-                optimizer.addEdge(reproj_edge_wrap.edge_);
-            } else{
-                auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, local_lm, lm_vtx,
-                                                            idx, undist_keypt.pt.x, undist_keypt.pt.y, x_right,
-                                                            inv_sigma_sq, sqrt_chi_sq);
-                reproj_edge_wraps.push_back(reproj_edge_wrap);
-                optimizer.addEdge(reproj_edge_wrap.edge_);
-            }
+            AssertLog(keyfrm->camera_->model_type_ == camera::model_type_t::VirtualCube, "for now, only virtual cube is supported");
+            const auto& cube_point = keyfrm->cube_keypts_.at(idx);
+            internal::se3::CubeSpaceExtra extra{cube_point.face, keyfrm_m->rig->poses_inv[keyfrm->sibling_idx_]};
+            auto reproj_edge_wrap = reproj_edge_wrapper(
+                        keyfrm, keyfrm->camera_, keyfrm_vtx,
+                        local_lm, lm_vtx,
+                        idx, cube_point.u, cube_point.v, x_right,
+                        inv_sigma_sq, sqrt_chi_sq, true,
+                        &extra);
+            reproj_edge_wraps.push_back(reproj_edge_wrap);
+            optimizer.addEdge(reproj_edge_wrap.edge_);
+
         }
     }
 
@@ -240,26 +245,24 @@ void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyf
     }
 
     // 7. Count the outliers
+    vector<int> outliers;
+    outliers.reserve(reproj_edge_wraps.size());
+    for (int i=0; i<reproj_edge_wraps.size(); ++i){
+        auto edge = reproj_edge_wraps[i].edge_;
 
-    std::vector<std::pair<std::shared_ptr<data::keyframe>, std::shared_ptr<data::landmark>>> outlier_observations;
-    outlier_observations.reserve(reproj_edge_wraps.size());
-
-    for (auto& reproj_edge_wrap : reproj_edge_wraps) {
-        auto edge = reproj_edge_wrap.edge_;
-
-        const auto& local_lm = reproj_edge_wrap.lm_;
+        const auto local_lm = reproj_edge_wraps[i].lm_;
         if (local_lm->will_be_erased()) {
             continue;
         }
 
-        if (reproj_edge_wrap.is_monocular_) {
-            if (chi_sq_2D < edge->chi2() || !reproj_edge_wrap.depth_is_positive()) {
-                outlier_observations.emplace_back(std::make_pair(reproj_edge_wrap.shot_, reproj_edge_wrap.lm_));
+        if (reproj_edge_wraps[i].is_monocular_) {
+            if (chi_sq_2D < edge->chi2() || !reproj_edge_wraps[i].depth_is_positive()) {
+                outliers.push_back(i);
             }
         }
         else {
-            if (chi_sq_3D < edge->chi2() || !reproj_edge_wrap.depth_is_positive()) {
-                outlier_observations.emplace_back(std::make_pair(reproj_edge_wrap.shot_, reproj_edge_wrap.lm_));
+            if (chi_sq_3D < edge->chi2() || !reproj_edge_wraps[i].depth_is_positive()) {
+                outliers.push_back(i);
             }
         }
     }
@@ -269,18 +272,16 @@ void local_bundle_adjuster::optimize(const std::shared_ptr<openvslam::data::keyf
     {
         std::lock_guard<std::mutex> lock(data::map_database::mtx_database_);
 
-        for (const auto& outlier_obs : outlier_observations) {
-            const auto& keyfrm = outlier_obs.first;
-            const auto& lm = outlier_obs.second;
-            keyfrm->erase_landmark(lm);
-            lm->erase_observation(keyfrm);
+        for (int i:outliers) {
+            reproj_edge_wraps[i].shot_->erase_landmark_with_index(reproj_edge_wraps[i].idx_);
+            reproj_edge_wraps[i].lm_->erase_observation(reproj_edge_wraps[i].shot_);
         }
 
         for (const auto& id_local_keyfrm_pair : local_keyfrms) {
             const auto& local_keyfrm = id_local_keyfrm_pair.second;
 
             auto keyfrm_vtx = keyfrm_vtx_container.get_vertex(local_keyfrm);
-            local_keyfrm->set_cam_pose(keyfrm_vtx->estimate());
+            local_keyfrm->setCamPose(keyfrm_vtx->estimate());
         }
 
         for (const auto& id_local_lm_pair : local_lms) {

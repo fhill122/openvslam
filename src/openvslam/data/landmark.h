@@ -98,6 +98,7 @@ public:
     //! get replace landmark
     std::shared_ptr<landmark> get_replaced() const;
 
+    // [ivan] based on single frame
     void increase_num_observable(unsigned int num_observable = 1);
     void increase_num_observed(unsigned int num_observed = 1);
     float get_observed_ratio() const;
@@ -111,12 +112,20 @@ public:
     unsigned int first_keyfrm_id_ = 0;
     unsigned int num_observations_ = 0;
 
+    // note ivan. many fields are just for local usage, modified to exclude them
     // Variables for frame tracking.
-    Vec2_t reproj_in_tracking_;
-    float x_right_in_tracking_;
-    bool is_observable_in_tracking_;
-    int scale_level_in_tracking_;
+    // Vec2_t reproj_in_tracking_;
+    // float x_right_in_tracking_;
+    // todo ivan. bad naming. used to quickly exclude already tracked 3d lm from projective matching
+    //  - it is set to false for lm of curr_frm_
+    //  - otherwise it is set to whether it can be observed by curr_frm_
+    //  - better come up a way to avoid this field, as it is only used locally for that purpose. build an unordered_set?
+    // bool is_observable_in_tracking_;
+    // int scale_level_in_tracking_;
     unsigned int identifier_in_local_map_update_ = 0;
+    // todo ivan. should assign to multi frame's or single frame's id?
+    //  - it is set to curr_frm_'s id
+    //  - skip projection in search_local_landmarks if == curr_frm_'s id
     unsigned int identifier_in_local_lm_search_ = 0;
 
     // Variables for loop-closing.
@@ -141,7 +150,7 @@ private:
     //! reference keyframe
     std::weak_ptr<keyframe> ref_keyfrm_;
 
-    // track counter
+    // track counter. [ivan] based on single frame
     unsigned int num_observable_ = 1;
     unsigned int num_observed_ = 1;
 

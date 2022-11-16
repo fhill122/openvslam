@@ -1,4 +1,4 @@
-#include "openvslam/data/keyframe.h"
+#include "openvslam/data/multi_keyframe.h"
 #include "openvslam/data/map_database.h"
 #include "openvslam/io/trajectory_io.h"
 
@@ -23,7 +23,9 @@ void trajectory_io::save_keyframe_trajectory(const std::string& path, const std:
 
     assert(map_db_);
     auto keyfrms = map_db_->get_all_keyframes();
-    std::sort(keyfrms.begin(), keyfrms.end(), [&](const std::shared_ptr<data::keyframe>& keyfrm_1, const std::shared_ptr<data::keyframe>& keyfrm_2) {
+    std::sort(keyfrms.begin(), keyfrms.end(),
+              [&](const std::shared_ptr<data::MultiKeyframe>& keyfrm_1,
+                  const std::shared_ptr<data::MultiKeyframe>& keyfrm_2) {
         return *keyfrm_1 < *keyfrm_2;
     });
 
@@ -44,7 +46,7 @@ void trajectory_io::save_keyframe_trajectory(const std::string& path, const std:
                  format, (*keyfrms.begin())->id_, (*keyfrms.rbegin())->id_, keyfrms.size());
 
     for (const auto& keyfrm : keyfrms) {
-        const Mat44_t cam_pose_wc = keyfrm->get_cam_pose_inv();
+        const Mat44_t cam_pose_wc = keyfrm->getCamPoseInv();
         const auto timestamp = keyfrm->timestamp_;
 
         if (format == "KITTI") {

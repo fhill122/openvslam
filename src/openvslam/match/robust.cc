@@ -15,6 +15,8 @@
 namespace openvslam {
 namespace match {
 
+// todo [ivan] do better. this checks with bow and obtain best distance (at most HAMMING_DIST_THR_LOW) that
+//  checks with epipolar constraint
 unsigned int robust::match_for_triangulation(const std::shared_ptr<data::keyframe>& keyfrm_1, const std::shared_ptr<data::keyframe>& keyfrm_2, const Mat33_t& E_12,
                                              std::vector<std::pair<unsigned int, unsigned int>>& matched_idx_pairs) const {
     unsigned int num_matches = 0;

@@ -6,19 +6,22 @@
 #define SRC_OPENVSLAM_DATA_MULTI_KEYFRAME_H_
 
 #include "keyframe.h"
+#include "multi_frame.h"
 #include "openvslam/camera/camera_rig.h"
 
 namespace openvslam {
 namespace data{
 
-struct MultiKeyframe {
-    std::vector<std::shared_ptr<keyframe>> frames;
-    camera::CameraRig* rig;
-
+struct MultiKeyframe : std::enable_shared_from_this<MultiKeyframe>{
+    // todo [ivan] remove tailing _
     //! keyframe ID
     unsigned int id_;
     //! next keyframe ID
-    static std::atomic<unsigned int> next_id_;
+    inline static std::atomic<unsigned int> next_id_{0};
+
+    // todo ivan. should be unique_ptr
+    std::vector<std::shared_ptr<keyframe>> frames;
+    camera::CameraRig* rig;
 
     //! timestamp in seconds
     double timestamp_;
@@ -41,9 +44,24 @@ struct MultiKeyframe {
 
     //////////////////////////////////////////////////////
 
-    MultiKeyframe() = default;
-    MultiKeyframe(camera::CameraRig* rig): rig(rig){
+private:
+    // MultiKeyframe() = default;
+    // todo [ivan] should take frames?
+    MultiKeyframe(camera::CameraRig* rig): id_(next_id_.fetch_add(std::memory_order_relaxed)), rig(rig){
         frames.reserve(rig->cameras.size());
+    }
+
+    MultiKeyframe(const MultiFrame &m_frame, map_database* map_db) :
+          id_(next_id_.fetch_add(std::memory_order_relaxed)), rig(m_frame.rig){
+        for (int i=0; i<m_frame.frames.size(); ++i) {
+            frames.emplace_back(keyframe::make_keyframe(this, i, *m_frame.frames[i], map_db));
+        }
+    }
+
+
+public:
+    [[nodiscard]] static std::shared_ptr<MultiKeyframe> Create(const MultiFrame &m_frame, map_database* map_db){
+        return std::shared_ptr<MultiKeyframe>(new MultiKeyframe(m_frame, map_db));
     }
 
     // todo ivan. reconsider this
@@ -59,6 +77,14 @@ struct MultiKeyframe {
     bool operator>(const MultiKeyframe& keyfrm) const { return id_ > keyfrm.id_; }
     bool operator>=(const MultiKeyframe& keyfrm) const { return id_ >= keyfrm.id_; }
 
+    inline std::shared_ptr<keyframe>& operator[](int i){return frames.at(i);}
+
+    inline std::shared_ptr<keyframe>& at(int i){return frames.at(i);}
+
+    // inline std
+
+    inline int size() const { return frames.size();}
+
     /* poses api */
 
     inline void setFramesPoses(){
@@ -68,7 +94,7 @@ struct MultiKeyframe {
         }
     }
 
-    inline void set_cam_pose(const Mat44_t& cam_pose_cw){
+    inline void setCamPose(const Mat44_t& cam_pose_cw){
         cam_pose_cw_is_valid_ = true;
         cam_pose_cw_ = cam_pose_cw;
         rot_cw_ = cam_pose_cw_.block<3, 3>(0, 0);
@@ -78,27 +104,35 @@ struct MultiKeyframe {
         setFramesPoses();
     }
 
-    inline void set_cam_pose(const g2o::SE3Quat& cam_pose_cw) {
-        set_cam_pose(util::converter::to_eigen_mat(cam_pose_cw));
+    inline void setCamPose(const g2o::SE3Quat& cam_pose_cw) {
+        setCamPose(util::converter::to_eigen_mat(cam_pose_cw));
     }
 
-    inline Mat44_t get_cam_pose() const {
+    inline Mat44_t getCamPose() const {
         return cam_pose_cw_;
     }
 
-    inline Mat44_t get_cam_pose_inv() const {
+    inline Mat44_t getCamPoseInv() const {
         Mat44_t cam_pose_wc = Mat44_t::Identity();
         cam_pose_wc.block<3, 3>(0, 0) = rot_wc_;
         cam_pose_wc.block<3, 1>(0, 3) = cam_center_;
         return cam_pose_wc;
     }
 
-    inline Vec3_t get_cam_center() const {
+    inline Vec3_t getCamCenter() const {
         return cam_center_;
     }
 
-    inline Mat33_t get_rotation_inv() const {
+    inline Mat33_t getRotationInv() const {
         return rot_wc_;
+    }
+
+    /* api that calls each frame */
+    unsigned int getNumTrackedLm(unsigned int min_obs_thr) const{
+        unsigned int total = 0;
+        for (const auto& frm : frames){
+            total += frm->get_num_tracked_landmarks(min_obs_thr);
+        }
     }
 };
 

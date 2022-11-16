@@ -2,8 +2,8 @@
 #define OPENVSLAM_MODULE_KEYFRAME_INSERTER_H
 
 #include "openvslam/camera/base.h"
-#include "openvslam/data/frame.h"
-#include "openvslam/data/keyframe.h"
+#include "openvslam/data/multi_frame.h"
+#include "openvslam/data/multi_keyframe.h"
 
 #include <memory>
 
@@ -32,19 +32,19 @@ public:
     /**
      * Check the new keyframe is needed or not
      */
-    bool new_keyframe_is_needed(const data::frame& curr_frm, const unsigned int num_tracked_lms,
-                                const data::keyframe& ref_keyfrm) const;
+    bool new_keyframe_is_needed(const data::MultiFrame& curr_frm, const unsigned int num_tracked_lms,
+                                const data::MultiKeyframe& ref_keyfrm) const;
 
     /**
      * Insert the new keyframe derived from the current frame
      */
-    std::shared_ptr<data::keyframe> insert_new_keyframe(data::frame& curr_frm);
+    std::shared_ptr<data::MultiKeyframe> insert_new_keyframe(data::MultiFrame& curr_frm);
 
 private:
     /**
      * Queue the new keyframe to the mapping module
      */
-    void queue_keyframe(const std::shared_ptr<data::keyframe>& keyfrm);
+    void queue_keyframe(const std::shared_ptr<data::MultiKeyframe>& keyfrm);
 
     //! setup type of the tracking camera
     const bool is_mono_;

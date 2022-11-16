@@ -33,6 +33,7 @@ namespace data {
 class frame;
 class landmark;
 class map_database;
+class MultiKeyframe;
 
 class keyframe : public std::enable_shared_from_this<keyframe> {
 public:
@@ -41,31 +42,13 @@ public:
     /**
      * Constructor for building from a frame
      */
-    keyframe(const frame& frm, map_database* map_db);
+    keyframe(MultiKeyframe *parent, unsigned int sibling_ind, const frame& frm, map_database* map_db);
 
-    /**
-     * Constructor for map loading
-     * (NOTE: some variables must be recomputed after the construction. See the definition.)
-     */
-    keyframe(const unsigned int id, const unsigned int src_frm_id, const double timestamp,
-             const Mat44_t& cam_pose_cw, camera::base* camera, const float depth_thr,
-             const unsigned int num_keypts, const std::vector<cv::KeyPoint>& keypts,
-             const std::vector<cv::KeyPoint>& undist_keypts, const eigen_alloc_vector<Vec3_t>& bearings,
-             const std::vector<float>& stereo_x_right, const std::vector<float>& depths, const cv::Mat& descriptors,
-             const unsigned int num_scale_levels, const float scale_factor,
-             bow_vocabulary* bow_vocab, map_database* map_db);
     virtual ~keyframe();
 
     // Factory method for create keyframe
-    static std::shared_ptr<keyframe> make_keyframe(const frame& frm, map_database* map_db);
-    static std::shared_ptr<keyframe> make_keyframe(
-        const unsigned int id, const unsigned int src_frm_id, const double timestamp,
-        const Mat44_t& cam_pose_cw, camera::base* camera, const float depth_thr,
-        const unsigned int num_keypts, const std::vector<cv::KeyPoint>& keypts,
-        const std::vector<cv::KeyPoint>& undist_keypts, const eigen_alloc_vector<Vec3_t>& bearings,
-        const std::vector<float>& stereo_x_right, const std::vector<float>& depths, const cv::Mat& descriptors,
-        const unsigned int num_scale_levels, const float scale_factor,
-        bow_vocabulary* bow_vocab, map_database* map_db);
+    static std::shared_ptr<keyframe> make_keyframe(MultiKeyframe *parent, unsigned int sibling_ind,
+                                                   const frame& frm, map_database* map_db);
 
     // operator overrides
     bool operator==(const keyframe& keyfrm) const { return id_ == keyfrm.id_; }
@@ -133,11 +116,6 @@ public:
     void erase_landmark_with_index(const unsigned int idx);
 
     /**
-     * Erase a landmark
-     */
-    void erase_landmark(const std::shared_ptr<landmark>& lm);
-
-    /**
      * Replace the landmark
      */
     void replace_landmark(std::shared_ptr<landmark>& lm, const unsigned int idx);
@@ -195,6 +173,9 @@ public:
 
     //! keyframe ID
     unsigned int id_;  // todo ivan. rm
+    // todo [ivan] store reference? or make multikeyframe enable_shared_from_this?
+    MultiKeyframe* const parent_;
+    const unsigned int sibling_idx_;  // access index in parent
     //! next keyframe ID
     static std::atomic<unsigned int> next_id_; // todo ivan. rm
 
@@ -236,6 +217,7 @@ public:
     const cv::Mat descriptors_;
 
     //! BoW features (DBoW2 or FBoW)
+    // [ivan] still used for triangulation match
 #ifdef USE_DBOW2
     DBoW2::BowVector bow_vec_;
     DBoW2::FeatureVector bow_feat_vec_;

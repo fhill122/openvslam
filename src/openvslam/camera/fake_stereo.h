@@ -11,7 +11,7 @@
 namespace openvslam{
 
 class FakeStereo {
-
+public:
 
     /**
      * use klt to find right points, convert it to depth.
@@ -27,12 +27,14 @@ class FakeStereo {
      * @param cam2
      * @param virtual_focal
      * @param base_line output
-     * @param ur output
+     * @param ur output. DBL_MAX if invalid
      */
-    void FindStereo(const cv::Mat &img1, const cv::Mat &img2, const std::vector<cv::Point2f>& keypts_1,
+    static void FindStereo(const cv::Mat &img1, const cv::Mat &img2, const std::vector<cv::Point2f>& keypts_1,
                     const eigen_alloc_vector<Vec3_t> &bearings_1,
                     const Mat33_t& rot_21, const Vec3_t& trans_21,
-                    const camera::base* cam2, double virtual_focal,
+                    const camera::base* cam1,
+                    const camera::base* cam2,
+                    double virtual_focal,
                     double &base_line, std::vector<double> &ur);
     /**
      *
@@ -43,13 +45,16 @@ class FakeStereo {
      * @param rot_21
      * @param trans_21
      * @param cam2
-     * @param pts3d output
+     * @param pts3d output. in img1 frame. optical center (0,0,0) if invalid
+     * @param keypts_2 output. -1 -1 if invalid
      */
-    void FindStereo(const cv::Mat &img1, const cv::Mat &img2, const std::vector<cv::Point2f>& keypts_1,
+    static void FindStereo(const cv::Mat &img1, const cv::Mat &img2, const std::vector<cv::Point2f>& keypts_1,
                     const eigen_alloc_vector<Vec3_t> &bearings_1,
                     const Mat33_t& rot_21, const Vec3_t& trans_21,
+                    const camera::base* cam1,
                     const camera::base* cam2,
-                    std::vector<cv::Point3f> &pts3d);
+                    std::vector<cv::Point3f> &pts3d,
+                    std::vector<cv::Point2f> &keypts_2);
 };
 
 }

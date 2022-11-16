@@ -9,6 +9,7 @@
 #include "openvslam/optimize/internal/se3/perspective_pose_opt_edge.h"
 #include "openvslam/optimize/internal/se3/equirectangular_pose_opt_edge.h"
 #include "openvslam/optimize/internal/se3/g2o_cubemap_vertices_edges.h"
+#include "edge_extra.h"
 
 #include <g2o/core/robust_kernel_impl.h>
 
@@ -22,42 +23,50 @@ namespace optimize {
 namespace internal {
 namespace se3 {
 
-template<typename T>
+// [ivan] template removed
 class pose_opt_edge_wrapper {
 public:
     pose_opt_edge_wrapper() = delete;
 
-    pose_opt_edge_wrapper(T* shot, shot_vertex* shot_vtx, const Vec3_t& pos_w,
+    /**
+     *
+     * @param shot_vtx
+     * @param pos_w
+     * @param idx
+     * @param obs_x
+     * @param obs_y
+     * @param obs_x_right
+     * @param inv_sigma_sq
+     * @param sqrt_chi_sq
+     * @param extra Extra info, we take no ownership in this function
+     */
+    inline pose_opt_edge_wrapper(camera::base* camera, shot_vertex* shot_vtx, const Vec3_t& pos_w,
                           const unsigned int idx, const float obs_x, const float obs_y, const float obs_x_right,
                           const float inv_sigma_sq, const float sqrt_chi_sq,
-                          const camera::CubeSpace::Face face);
+                          void *extra = nullptr);
 
     virtual ~pose_opt_edge_wrapper() = default;
 
-    bool is_inlier() const;
 
-    bool is_outlier() const;
+    void set_as_inlier() const {edge_->setLevel(0);}
 
-    void set_as_inlier() const;
+    void set_as_outlier() const {edge_->setLevel(1);}
 
-    void set_as_outlier() const;
-
+    // [ivan] this is never called, why?
     bool depth_is_positive() const;
 
     g2o::OptimizableGraph::Edge* edge_;
 
     camera::base* camera_;
-    T* shot_;
     const unsigned int idx_;
     const bool is_monocular_;
 };
 
-template<typename T>
-inline pose_opt_edge_wrapper<T>::pose_opt_edge_wrapper(T* shot, shot_vertex* shot_vtx, const Vec3_t& pos_w,
+inline pose_opt_edge_wrapper::pose_opt_edge_wrapper(camera::base* camera, shot_vertex* shot_vtx, const Vec3_t& pos_w,
                                                        const unsigned int idx, const float obs_x, const float obs_y, const float obs_x_right,
                                                        const float inv_sigma_sq, const float sqrt_chi_sq,
-                                                       const camera::CubeSpace::Face face)
-    : camera_(shot->camera_), shot_(shot), idx_(idx), is_monocular_(obs_x_right < 0) {
+                                                       void *extra)
+    : camera_(camera), idx_(idx), is_monocular_(obs_x_right < 0) {
     // 拘束条件を設定
     switch (camera_->model_type_) {
         case camera::model_type_t::Perspective: {
@@ -206,6 +215,8 @@ inline pose_opt_edge_wrapper<T>::pose_opt_edge_wrapper(T* shot, shot_vertex* sho
             break;
         }
         case camera::model_type_t::VirtualCube:{
+            CubeSpaceExtra* cb_extra = static_cast<CubeSpaceExtra*>(extra);
+
             auto c = static_cast<camera::CubeSpace*>(camera_);
             // todo ivan. here we ignore stereo observation
             auto edge = new g2o::EdgeSE3ProjectXYZMultiPinholeOnlyPose();
@@ -215,8 +226,9 @@ inline pose_opt_edge_wrapper<T>::pose_opt_edge_wrapper(T* shot, shot_vertex* sho
             edge->setInformation(Mat22_t::Identity() * inv_sigma_sq);
 
             edge->setCam(c);
-            edge->setFace(face);
+            edge->setFace(cb_extra->face);
             edge->Xw = pos_w;
+            edge->setPoseBC(cb_extra->T_B_C);
 
             edge->setVertex(0, shot_vtx);
 
@@ -231,28 +243,7 @@ inline pose_opt_edge_wrapper<T>::pose_opt_edge_wrapper(T* shot, shot_vertex* sho
     edge_->setRobustKernel(huber_kernel);
 }
 
-template<typename T>
-inline bool pose_opt_edge_wrapper<T>::is_inlier() const {
-    return edge_->level() == 0;
-}
-
-template<typename T>
-inline bool pose_opt_edge_wrapper<T>::is_outlier() const {
-    return edge_->level() != 0;
-}
-
-template<typename T>
-inline void pose_opt_edge_wrapper<T>::set_as_inlier() const {
-    edge_->setLevel(0);
-}
-
-template<typename T>
-inline void pose_opt_edge_wrapper<T>::set_as_outlier() const {
-    edge_->setLevel(1);
-}
-
-template<typename T>
-inline bool pose_opt_edge_wrapper<T>::depth_is_positive() const {
+inline bool pose_opt_edge_wrapper::depth_is_positive() const {
     switch (camera_->model_type_) {
         case camera::model_type_t::Perspective: {
             if (is_monocular_) {

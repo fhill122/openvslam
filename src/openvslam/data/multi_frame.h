@@ -12,8 +12,16 @@
 namespace openvslam {
 namespace data{
 
+
+class MultiKeyframe;
+
 struct MultiFrame {
-    std::vector<frame> frames;
+    //! current frame ID
+    unsigned int id_;
+    //! next frame ID
+    inline static std::atomic<unsigned int> next_id_{0};
+
+    std::vector<std::shared_ptr<frame>> frames;
     camera::CameraRig* rig;
 
     // Camera rig pose
@@ -30,14 +38,24 @@ struct MultiFrame {
     //! translation: camera -> world
     Vec3_t cam_center_;
 
-
+    //! reference keyframe for tracking
+    std::shared_ptr<MultiKeyframe> ref_keyfrm_ = nullptr;
 
     //////////////////////////////////////////////////////
 
     MultiFrame() = default;
-    MultiFrame(camera::CameraRig* rig): rig(rig){
+    explicit MultiFrame(camera::CameraRig* rig): id_(next_id_.fetch_add(std::memory_order_relaxed)), rig(rig){
         frames.reserve(rig->cameras.size());
     }
+
+    bool operator==(const frame& frm) const { return this->id_ == frm.id_; }
+    bool operator!=(const frame& frm) const { return !(*this == frm); }
+
+    inline std::shared_ptr<frame>& operator[](int i){return frames.at(i);}
+
+    inline std::shared_ptr<frame>& at(int i){return frames.at(i);}
+
+    inline int size(){ return frames.size();}
 
     // todo ivan. reconsider this
     Vec3_t spacialTriangulate(){
@@ -49,7 +67,7 @@ struct MultiFrame {
     inline void setFramesPoses(){
         AssertLog(cam_pose_cw_is_valid_, "");
         for (int i=0; i<frames.size(); ++i) {
-            frames[i].set_cam_pose(rig->poses[i]*cam_pose_cw_);
+            frames[i]->set_cam_pose(rig->poses[i]*cam_pose_cw_);
         }
     }
 
@@ -87,7 +105,22 @@ struct MultiFrame {
         return rot_wc_;
     }
 
+    /* api that calls each frame */
+    unsigned int getNumKeypts() const{
+        unsigned int n =0;
+        for (const auto &frm : frames) {
+            n += frm->num_keypts_;
+        }
+        return n;
+    }
 
+    std::vector<std::vector<cv::KeyPoint>> getKeypts() const{
+        std::vector<std::vector<cv::KeyPoint>> out(frames.size());
+        for (int i=0; i<frames.size(); ++i){
+            out[i] = frames[i]->keypts_;
+        }
+        return out;
+    }
 };
 
 }} // namespace

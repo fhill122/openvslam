@@ -3,12 +3,11 @@
 
 #include <memory>
 #include "openvslam/data/map_database.h"
+#include "openvslam/data/multi_frame.h"
 
 namespace openvslam {
 
 namespace data {
-class frame;
-class keyframe;
 class landmark;
 } // namespace data
 
@@ -17,24 +16,25 @@ namespace module {
 class local_map_updater {
 public:
     static std::vector<std::shared_ptr<data::landmark>>
-    GetLocalLandmarks(const data::frame& curr_frm, const data::map_database *map_db, unsigned int num_kf){
+    GetLocalLandmarks(const data::MultiFrame& curr_frm, const data::map_database *map_db, unsigned int num_kf){
         std::set<std::shared_ptr<data::landmark>> local_lms;
 
         auto kfs = map_db->getKeyframes<std::vector>(curr_frm.ref_keyfrm_->id_-num_kf, curr_frm.ref_keyfrm_->id_+1);
 
         for (const auto& keyfrm : kfs) {
-            const auto& lms = keyfrm->get_landmarks();
+            for (const auto &frm : keyfrm->frames) {
+                const auto& lms = frm->get_landmarks();
+                for (const auto& lm : lms) {
+                    if (!lm) {
+                        continue;
+                    }
+                    if (lm->will_be_erased()) {
+                        continue;
+                    }
 
-            for (const auto& lm : lms) {
-                if (!lm) {
-                    continue;
+                    // todo ivan. shared_ptr copy maybe heavy
+                    local_lms.insert(lm);
                 }
-                if (lm->will_be_erased()) {
-                    continue;
-                }
-
-                // todo ivan. shared_ptr copy maybe heavy
-                local_lms.insert(lm);
             }
         }
 

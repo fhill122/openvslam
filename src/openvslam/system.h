@@ -65,31 +65,10 @@ public:
     const std::shared_ptr<publish::frame_publisher> get_frame_publisher() const;
 
     //-----------------------------------------
-    // module management
-
-    //! Enable the mapping module
-    void enable_mapping_module();
-
-    //! Disable the mapping module
-    void disable_mapping_module();
-
-    //! The mapping module is enabled or not
-    bool mapping_module_is_enabled() const;
-
-    //-----------------------------------------
     // data feeding methods
 
-    //! Feed a monocular frame to SLAM system
-    //! (NOTE: distorted images are acceptable if calibrated)
-    std::shared_ptr<Mat44_t> feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask = cv::Mat{});
-
-    //! Feed a stereo frame to SLAM system
-    //! (Note: Left and Right images must be stereo-rectified)
-    std::shared_ptr<Mat44_t> feed_stereo_frame(const cv::Mat& left_img, const cv::Mat& right_img, const double timestamp, const cv::Mat& mask = cv::Mat{});
-
-    //! Feed an RGBD frame to SLAM system
-    //! (Note: RGB and Depth images must be aligned)
-    std::shared_ptr<Mat44_t> feed_RGBD_frame(const cv::Mat& rgb_img, const cv::Mat& depthmap, const double timestamp, const cv::Mat& mask = cv::Mat{});
+    std::shared_ptr<Mat44_t> feed_multi_frames(const std::vector<cv::Mat> &imgs, double timestamp,
+                                               const std::vector<cv::Mat> &masks = std::vector<cv::Mat>());
 
     //-----------------------------------------
     // management for pause
@@ -121,6 +100,10 @@ public:
     //!! Termination of the system is requested or not
     bool terminate_is_requested() const;
 
+public:
+    //! camera rig
+    camera::CameraRig *cam_rig_ = nullptr;
+
 private:
     //! Check reset request of the system
     void check_reset_request();
@@ -136,9 +119,6 @@ private:
 
     //! map database
     data::map_database* map_db_ = nullptr;
-
-    //! camera rig
-    camera::CameraRig *cam_rig_ = nullptr;
 
     //! BoW vocabulary
     data::bow_vocabulary* bow_vocab_ = nullptr;

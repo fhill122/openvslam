@@ -9,6 +9,7 @@
 #include "openvslam/optimize/internal/se3/perspective_reproj_edge.h"
 #include "openvslam/optimize/internal/se3/equirectangular_reproj_edge.h"
 #include "openvslam/optimize/internal/se3/g2o_cubemap_vertices_edges.h"
+#include "edge_extra.h"
 
 #include <g2o/core/robust_kernel_impl.h>
 
@@ -24,16 +25,18 @@ namespace optimize {
 namespace internal {
 namespace se3 {
 
+// todo ivan. why template while only used for keyframe?
 template<typename T>
 class reproj_edge_wrapper {
 public:
     reproj_edge_wrapper() = delete;
 
-    reproj_edge_wrapper(const std::shared_ptr<T>& shot, shot_vertex* shot_vtx,
+    // [ivan] actually shot is keyframe, while shot_vtx is built from MultiKeyframe, shot is just kept for temp storage
+    reproj_edge_wrapper(const std::shared_ptr<T>& shot, camera::base* camera, shot_vertex* shot_vtx,
                         const std::shared_ptr<data::landmark>& lm, landmark_vertex* lm_vtx,
                         const unsigned int idx, const float obs_x, const float obs_y, const float obs_x_right,
                         const float inv_sigma_sq, const float sqrt_chi_sq, const bool use_huber_loss = true,
-                        const camera::CubeSpace::Face face = camera::CubeSpace::UNKNOWN_FACE);
+                        void *extra = nullptr);
 
     virtual ~reproj_edge_wrapper() = default;
 
@@ -57,12 +60,12 @@ public:
 };
 
 template<typename T>
-inline reproj_edge_wrapper<T>::reproj_edge_wrapper(const std::shared_ptr<T>& shot, shot_vertex* shot_vtx,
+inline reproj_edge_wrapper<T>::reproj_edge_wrapper(const std::shared_ptr<T>& shot, camera::base* camera, shot_vertex* shot_vtx,
                                                    const std::shared_ptr<data::landmark>& lm, landmark_vertex* lm_vtx,
                                                    const unsigned int idx, const float obs_x, const float obs_y, const float obs_x_right,
                                                    const float inv_sigma_sq, const float sqrt_chi_sq, const bool use_huber_loss,
-                                                   const camera::CubeSpace::Face face)
-    : camera_(shot->camera_), shot_(shot), lm_(lm), idx_(idx), is_monocular_(obs_x_right < 0) {
+                                                   void *extra)
+    : camera_(camera), shot_(shot), lm_(lm), idx_(idx), is_monocular_(obs_x_right < 0) {
     // 拘束条件を設定
     switch (camera_->model_type_) {
         case camera::model_type_t::Perspective: {
@@ -204,23 +207,24 @@ inline reproj_edge_wrapper<T>::reproj_edge_wrapper(const std::shared_ptr<T>& sho
             break;
         }
         case camera::model_type_t::VirtualCube:{
+            CubeSpaceExtra* cb_extra = static_cast<CubeSpaceExtra*>(extra);
+
             auto c = static_cast<camera::CubeSpace*>(camera_);
             assert(is_monocular_);
-            if (is_monocular_) {
-                auto edge = new g2o::EdgeSE3ProjectXYZMultiPinhole();
+            auto edge = new g2o::EdgeSE3ProjectXYZMultiPinhole();
 
-                const Vec2_t obs{obs_x, obs_y};
-                edge->setMeasurementInFace(obs);
-                edge->setInformation(Mat22_t::Identity() * inv_sigma_sq);
+            const Vec2_t obs{obs_x, obs_y};
+            edge->setMeasurementInFace(obs);
+            edge->setInformation(Mat22_t::Identity() * inv_sigma_sq);
 
-                edge->setCam(c);
-                edge->setFace(face);
+            edge->setCam(c);
+            edge->setFace(cb_extra->face);
+            edge->setPoseBC(cb_extra->T_B_C);
 
-                edge->setVertex(0, lm_vtx);
-                edge->setVertex(1, shot_vtx);
+            edge->setVertex(0, lm_vtx);
+            edge->setVertex(1, shot_vtx);
 
-                edge_ = edge;
-            }
+            edge_ = edge;
             break;
         }
     }

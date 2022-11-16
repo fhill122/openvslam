@@ -53,9 +53,6 @@ public:
     //-----------------------------------------
     // interfaces
 
-    //! Set mapping module status
-    void set_mapping_module_status(const bool mapping_is_enabled);
-
     //! Get mapping module status
     bool get_mapping_module_status() const;
 
@@ -65,18 +62,7 @@ public:
     //! Get the keypoint matches between the initial frame and the current frame
     std::vector<int> get_initial_matches() const;
 
-    //! Track a monocular frame
-    //! (NOTE: distorted images are acceptable if calibrated)
-    std::shared_ptr<Mat44_t> track_monocular_image(const cv::Mat& img, const double timestamp, const cv::Mat& mask = cv::Mat{});
-
-    //! Track a stereo frame
-    //! (Note: Left and Right images must be stereo-rectified)
-    std::shared_ptr<Mat44_t> track_stereo_image(const cv::Mat& left_img_rect, const cv::Mat& right_img_rect, const double timestamp, const cv::Mat& mask = cv::Mat{});
-
-    //! Track an RGBD frame
-    //! (Note: RGB and Depth images must be aligned)
-    std::shared_ptr<Mat44_t> track_RGBD_image(const cv::Mat& img, const cv::Mat& depthmap, const double timestamp, const cv::Mat& mask = cv::Mat{});
-
+    // todo [ivan] allow frames of stereo and depth, just another vector of cv::Mat??
     //! Track multi cam
     std::shared_ptr<Mat44_t> track_multi_images(const std::vector<cv::Mat> &imgs, const double timestamp,
                                                const std::vector<cv::Mat> &masks = std::vector<cv::Mat>());
@@ -127,10 +113,9 @@ public:
     tracker_state_t last_tracking_state_ = tracker_state_t::NotInitialized;
 
     //! current frame and its image
-    data::frame curr_frm_;
-    data::MultiFrame curr_mfrm_;
+    data::MultiFrame curr_frm_;
     //! image of the current frame. saved for visualization
-    cv::Mat img_gray_;
+    // cv::Mat img_gray_;
     std::vector<cv::Mat> imgs_gray_;
 
     //! elapsed microseconds for each tracking
@@ -142,7 +127,6 @@ protected:
 
     //! Main stream of the tracking module
     void track();
-    void mfTrack();
 
     //! Try to initialize with the current frame
     bool initialize();
@@ -215,7 +199,7 @@ protected:
     unsigned int num_tracked_lms_ = 0;
 
     //! last frame
-    data::frame last_frm_;
+    data::MultiFrame last_frm_;
 
     //! latest frame ID which succeeded in relocalization
     unsigned int last_reloc_frm_id_ = 0;

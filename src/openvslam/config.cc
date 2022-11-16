@@ -99,12 +99,13 @@ unique_ptr<camera::CameraRig> config::CamRigFromYaml(const YAML::Node& yaml_node
     struct CameraRig{
         unsigned int num_cameras;
         vector<vector<double>> poses;
+        vector<vector<int>> overlap;
     } CameraRig;
     SET_FROM_YAML(yaml_node, CameraRig.num_cameras);
     SET_FROM_YAML(yaml_node, CameraRig.poses);
+    SET_FROM_YAML(yaml_node, CameraRig.overlap);
     AssertLog(CameraRig.num_cameras == CameraRig.poses.size(), "");
     AssertLog(CameraRig.num_cameras>=1, "at least one camera");
-
 
     rig->cameras.resize(CameraRig.num_cameras);
     rig->poses_inv.resize(CameraRig.num_cameras);
@@ -113,8 +114,8 @@ unique_ptr<camera::CameraRig> config::CamRigFromYaml(const YAML::Node& yaml_node
         vector<double> pose = CameraRig.poses[i];
         AssertLog(pose.size()==7, "");
         rig->poses_inv[i].setIdentity();
-        rig->poses_inv[i].block<3,3>(0,0) = Eigen::Quaterniond(pose[0], pose[1],
-                                                           pose[2], pose[3]).toRotationMatrix();
+        rig->poses_inv[i].block<3,3>(0,0) =
+            Eigen::Quaterniond(pose[3],pose[0], pose[1],pose[2]).toRotationMatrix();
         rig->poses_inv[i](0,3) = pose[4];
         rig->poses_inv[i](1,3) = pose[5];
         rig->poses_inv[i](2,3) = pose[6];
@@ -122,14 +123,28 @@ unique_ptr<camera::CameraRig> config::CamRigFromYaml(const YAML::Node& yaml_node
         rig->poses[i] = rig->poses_inv[i].inverse();
 
         YAML::Node cam_node;
-        if (i==0){
-            cam_node = yaml_node["Camera"];
-        } else{
-            cam_node = yaml_node["Camera" + to_string(i)];
+        try{
+            if (i==0){
+                cam_node = yaml_node["Camera"];
+            } else{
+                cam_node = yaml_node["Camera" + to_string(i)];
+            }
         }
-        AssertLog(cam_node, "");
+        catch (...){
+            AssertLog(false, "failed to load Camera" + to_string(i));
+        }
         rig->cameras[i] = unique_ptr<camera::base>(CamFromYaml(cam_node));
     }
+
+    rig->overlaps.resize(CameraRig.num_cameras);
+    for (unsigned int i=0; i< CameraRig.overlap.size(); ++i){
+        AssertLog(CameraRig.overlap[i].size()==2, "");
+        int ind1 = CameraRig.overlap[i][0];
+        int ind2 = CameraRig.overlap[i][1];
+        camera::CamOverlap overlap(ind1, ind2);
+        rig->overlaps[ind1].push_back(overlap);
+    }
+    rig->genOverlapMask();
 
     return rig;
 }

@@ -14,17 +14,20 @@ void FakeStereo::FindStereo(const cv::Mat& img1, const cv::Mat& img2,
                             const std::vector<cv::Point2f>& keypts_1,
                             const eigen_alloc_vector<Vec3_t>& bearings_1,
                             const Mat33_t& rot_21, const Vec3_t& trans_21,
-                            const camera::base* cam2, double virtual_focal,
+                            const camera::base* cam1,
+                            const camera::base* cam2,
+                            double virtual_focal,
                             double& base_line, std::vector<double>& ur) {
     // todo ivan. using cubespace, we actually allow negative ur, but that's not the case where other part of the openvslam
     vector<cv::Point3f> pts3d;
-    FindStereo(img1, img2, keypts_1, bearings_1, rot_21, trans_21, cam2, pts3d);
+    vector<cv::Point2f> keypts_2;
+    FindStereo(img1, img2, keypts_1, bearings_1, rot_21, trans_21, cam1, cam2, pts3d, keypts_2);
 
     ur.clear();
     ur.reserve(pts3d.size());
     base_line = trans_21.norm();
     for(size_t i = 0; i < pts3d.size(); i++) {
-        if (pts3d[i].z==0){
+        if (pts3d[i].z==0 && pts3d[i].x==0 && pts3d[i].y==0){
             ur.push_back(DBL_MAX);
             continue;
         }
@@ -34,17 +37,19 @@ void FakeStereo::FindStereo(const cv::Mat& img1, const cv::Mat& img2,
 
 void FakeStereo::FindStereo(const cv::Mat& img1, const cv::Mat& img2,
                             const vector<cv::Point2f>& keypts_1, const eigen_alloc_vector<Vec3_t>& bearings_1,
-                            const Mat33_t& rot_21, const Vec3_t& trans_21, const camera::base* cam2,
-                            vector<cv::Point3f>& pts3d) {
+                            const Mat33_t& rot_21, const Vec3_t& trans_21,
+                            const camera::base* cam1,
+                            const camera::base* cam2,
+                            vector<cv::Point3f>& pts3d, vector<cv::Point2f> &keypts_2) {
     constexpr double kReverseErrTh = 0.5;
     constexpr double kReprojErrTh = 2.0;
 
-    auto distance_func = [](const cv::Point2f &pt1, const cv::Point2f &pt2)->bool
+    // todo [ivan] rm square root to save calc
+    auto distance_func = [](const cv::Point2f &pt1, const cv::Point2f &pt2)->float
     {return hypot(pt1.x - pt2.x, pt1.y - pt2.y);};
 
     // todo ivan. timing it
 
-    vector<cv::Point2f> keypts_2;
     vector<cv::Point2f> keypts_1_reversed;
     vector<uchar> status;
     vector<uchar> status_reversed;
@@ -69,16 +74,23 @@ void FakeStereo::FindStereo(const cv::Mat& img1, const cv::Mat& img2,
     for(size_t i = 0; i < status.size(); i++) {
         if (status[i]==0){
             pts3d.emplace_back(0,0,0);
+            keypts_2[i].x = -1;
+            keypts_2[i].y = -1;
             continue;
         }
         Vec3_t bearing_2 = cam2->convert_point_to_bearing(keypts_2[i]);
-        Vec3_t pt3d = solve::triangulator::triangulate(bearings_1[i], bearing_2, rot_21, trans_21);
-        cv::Point2f reproj = cam2->convert_bearing_to_point(pt3d);
-        if (distance_func(keypts_2[i], reproj)>kReprojErrTh) {
+        Vec3_t p_cam1 = solve::triangulator::triangulate(bearings_1[i], bearing_2, rot_21, trans_21);
+        cv::Point2f reproj_1 = cam1->convert_bearing_to_point(p_cam1);
+        Vec3_t p_cam2 = rot_21*p_cam1 + trans_21;
+        cv::Point2f reproj_2 = cam2->convert_bearing_to_point(p_cam2);
+        if (distance_func(keypts_2[i], reproj_2)>kReprojErrTh ||
+            distance_func(keypts_1[i], reproj_1)>kReprojErrTh ){
             pts3d.emplace_back(0,0,0);
+            keypts_2[i].x = -1;
+            keypts_2[i].y = -1;
             continue ;
         }
-        pts3d.emplace_back(pt3d.x(),pt3d.y(),pt3d.z());
+        pts3d.emplace_back(p_cam1.x(), p_cam1.y(), p_cam1.z());
     }
 }
 

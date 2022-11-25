@@ -393,9 +393,12 @@ void tracking_module::update_local_map() {
 }
 
 void tracking_module::search_local_landmarks() {
-    // select the landmarks which can be reprojected from the ones observed in the current frame
-    for(auto &frm : curr_frm_.frames) {
-        for (const auto& lm : frm->landmarks_) {
+    match::projection projection_matcher(0.8);
+    const float margin = (curr_frm_.id_ < last_reloc_frm_id_ + 2)
+                             ? 20.0 : 10;
+
+    for(const auto & frame : curr_frm_.frames) {
+        for (const auto& lm : frame->landmarks_) {
             if (!lm) {
                 continue;
             }
@@ -403,48 +406,34 @@ void tracking_module::search_local_landmarks() {
                 continue;
             }
 
-            // this landmark cannot be reprojected
-            // because already observed in the current frame
-            // todo ivan. this is just stupid, previously we set outlier lm is_observable_in_tracking_ = false
-            // lm->is_observable_in_tracking_ = false;
-
-            // // todo [ivan] doing here. should kept for each frame, not the multi frame
-            lm->identifier_in_local_lm_search_ = curr_frm_.id_;
+            lm->identifier_in_local_lm_search_ = frame->id_;
 
             // this landmark is observable from the current frame
             lm->increase_num_observable();
         }
-    }
 
-    vector<vector<match::ObservableLandmark>> observable_lms(curr_frm_.frames.size());
-    for (auto& lm : local_landmarks_) {
-        // avoid the landmarks which cannot be reprojected (== observed in the current frame)
-        if (lm->identifier_in_local_lm_search_ == curr_frm_.id_) {
-            continue;
-        }
-        if (lm->will_be_erased()) {
-            continue;
-        }
+        vector<match::ObservableLandmark> observable_lms;
+        observable_lms.reserve(local_landmarks_.size());
+        for (auto& lm : local_landmarks_) {
+            // avoid the landmarks which cannot be reprojected (== observed in the current frame)
+            if (lm->identifier_in_local_lm_search_ == frame->id_) {
+                continue;
+            }
+            if (lm->will_be_erased()) {
+                continue;
+            }
 
-        // check the observability
-        for (int i=0; i<curr_frm_.frames.size(); ++i){
-            observable_lms.at(i).reserve(local_landmarks_.size());
             Vec2_t reproj;
             float x_right;
             unsigned int pred_scale_level;
-            if (curr_frm_.frames[i]->can_observe(lm, 0.5, reproj, x_right, pred_scale_level)){
-                observable_lms.at(i).push_back({lm, reproj.x(), reproj.y(), x_right, pred_scale_level});
+            if (frame->can_observe(lm, 0.5, reproj, x_right, pred_scale_level)){
+                observable_lms.push_back({lm, reproj.x(), reproj.y(), x_right, pred_scale_level});
                 lm->increase_num_observable();
             }
         }
-    }
 
-    // acquire more 2D-3D matches by projecting the local landmarks to the current frame
-    match::projection projection_matcher(0.8);
-    const float margin = (curr_frm_.id_ < last_reloc_frm_id_ + 2)
-                             ? 20.0 : 10;
-    for(int i=0; i<curr_frm_.frames.size(); ++i){
-        projection_matcher.match_frame_and_landmarks(*curr_frm_.frames[i], observable_lms[i], margin);
+        // acquire more 2D-3D matches by projecting the local landmarks to the current frame
+        projection_matcher.match_frame_and_landmarks(*frame, observable_lms, margin);
     }
 }
 

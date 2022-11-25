@@ -66,7 +66,7 @@ if(MSVC)
     add_compile_options(/W4 $<$<CONFIG:Debug>:/MTd>;$<$<CONFIG:Release>:/MT> /source-charset:utf-8 /execution-charset:utf-8 /wd4251 /wd4244 /wd4305 /wd4267 /wd4127)
     add_compile_options("$<$<CONFIG:Debug>:/Zo>;$<$<CONFIG:Release>:/O2>;$<$<CONFIG:None>:/O2>")
 else()
-    add_compile_options(-Wall -Wextra)
+    add_compile_options(-Wall -Wextra -Werror=return-type)
     add_compile_options(
         "$<$<CONFIG:Debug>:-O0>"
         "$<$<CONFIG:Release>:-O3>"

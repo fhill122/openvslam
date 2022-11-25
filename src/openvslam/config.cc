@@ -50,8 +50,8 @@ std::ostream& operator<<(std::ostream& os, const config& cfg) {
 }
 
 camera::base* config::CamFromYaml(const YAML::Node& yaml_node) {
-    auto normal_cam_from_yaml =
-        [](camera::model_type_t camera_model_type, const YAML::Node& base_node) -> camera::base*{
+    auto normal_cam_from_yaml = [](camera::model_type_t camera_model_type, const YAML::Node& base_node)
+                                -> camera::base*{
         switch (camera_model_type) {
             case camera::model_type_t::Perspective: {
                 return new camera::perspective(base_node);
@@ -68,6 +68,7 @@ camera::base* config::CamFromYaml(const YAML::Node& yaml_node) {
             default:
                 AssertLog(false, "not implemented");
         }
+        return nullptr;
     };
 
     spdlog::debug("load camera model type");

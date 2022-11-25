@@ -62,11 +62,6 @@ struct MultiFrame {
 
     inline int size(){ return frames.size();}
 
-    // todo ivan. reconsider this
-    Vec3_t spacialTriangulate(){
-
-    }
-
     /* poses api */
 
     inline void setFramesPoses(){

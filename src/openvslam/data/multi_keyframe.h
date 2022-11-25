@@ -65,11 +65,6 @@ public:
         return std::shared_ptr<MultiKeyframe>(new MultiKeyframe(m_frame, map_db));
     }
 
-    // todo ivan. reconsider this
-    Vec3_t spacialTriangulate(){
-
-    }
-
     // operator overrides
     bool operator==(const MultiKeyframe& keyfrm) const { return id_ == keyfrm.id_; }
     bool operator!=(const MultiKeyframe& keyfrm) const { return !(*this == keyfrm); }
@@ -134,6 +129,7 @@ public:
         for (const auto& frm : frames){
             total += frm->get_num_tracked_landmarks(min_obs_thr);
         }
+        return total;
     }
 };
 

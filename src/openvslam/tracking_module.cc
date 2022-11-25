@@ -143,6 +143,12 @@ std::shared_ptr<Mat44_t> tracking_module::track_multi_images(const vector<cv::Ma
     }
 
     track();
+
+    std::shared_ptr<Mat44_t> cam_pose_wc = nullptr;
+    if (curr_frm_.cam_pose_cw_is_valid_) {
+        cam_pose_wc = std::allocate_shared<Mat44_t>(Eigen::aligned_allocator<Mat44_t>(), curr_frm_.get_cam_pose_inv());
+    }
+    return cam_pose_wc;
 }
 
 void tracking_module::reset() {
@@ -180,6 +186,7 @@ void tracking_module::track() {
     }
 
     // LOCK the map database
+    // todo [ivan] man, this is a long lock...
     std::lock_guard<std::mutex> lock(data::map_database::mtx_database_);
 
     if (tracking_state_ == tracker_state_t::Initializing) {
@@ -276,12 +283,14 @@ bool tracking_module::track_current_frame() {
         // Tracking mode
         if (twist_is_valid_ && last_reloc_frm_id_ + 2 < curr_frm_.id_) {
             // if the motion model is valid
+            spdlog::debug("track with motion");
             succeeded = frame_tracker_.motion_based_track(curr_frm_, last_frm_, twist_);
         }
+        // if (!succeeded) {
+        //     succeeded = frame_tracker_.bow_match_based_track(curr_frm_, last_frm_, curr_frm_.ref_keyfrm_);
+        // }
         if (!succeeded) {
-            succeeded = frame_tracker_.bow_match_based_track(curr_frm_, last_frm_, curr_frm_.ref_keyfrm_);
-        }
-        if (!succeeded) {
+            spdlog::debug("track with robust");
             succeeded = frame_tracker_.robust_match_based_track(curr_frm_, last_frm_, curr_frm_.ref_keyfrm_);
         }
     }
@@ -398,6 +407,8 @@ void tracking_module::search_local_landmarks() {
             // because already observed in the current frame
             // todo ivan. this is just stupid, previously we set outlier lm is_observable_in_tracking_ = false
             // lm->is_observable_in_tracking_ = false;
+
+            // // todo [ivan] doing here. should kept for each frame, not the multi frame
             lm->identifier_in_local_lm_search_ = curr_frm_.id_;
 
             // this landmark is observable from the current frame

@@ -19,7 +19,7 @@ class base;
 namespace data {
 
 class frame;
-class MultiKeyframe;
+struct MultiKeyframe;
 class landmark;
 class camera_database;
 

@@ -13,9 +13,11 @@ namespace openvslam {
 namespace data{
 
 
-class MultiKeyframe;
+struct MultiKeyframe;
 
 struct MultiFrame {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     //! current frame ID
     unsigned int id_;
     //! next frame ID
@@ -43,8 +45,11 @@ struct MultiFrame {
 
     //////////////////////////////////////////////////////
 
-    MultiFrame() = default;
-    explicit MultiFrame(camera::CameraRig* rig): id_(next_id_.fetch_add(std::memory_order_relaxed)), rig(rig){
+    MultiFrame() = delete;
+
+    explicit MultiFrame(unsigned int id) : id_(id){};
+
+    explicit MultiFrame(camera::CameraRig* rig): id_(next_id_.fetch_add(1, std::memory_order_relaxed)), rig(rig){
         frames.reserve(rig->cameras.size());
     }
 

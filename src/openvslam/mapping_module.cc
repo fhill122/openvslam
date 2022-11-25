@@ -50,6 +50,7 @@ void mapping_module::set_tracking_module(tracking_module* tracker) {
 
 void mapping_module::run() {
     spdlog::info("start mapping module");
+    pthread_setname_np("mapping module");
 
     is_terminated_ = false;
 
@@ -193,11 +194,13 @@ void mapping_module::store_new_keyframe() {
                 continue;
             }
 
-            // todo [ivan] check this. keyframe just created, how come lm would ever have observation of curr_keyfrm_?!
             // if `lm` does not have the observation information from `cur_keyfrm_`,
             // add the association between the keyframe and the landmark
             if (lm->is_observed_in_keyframe(kf)) {
-                AssertLog(false, "checking, this should never happen");
+                // todo [ivan] when this would happen:
+                //  1. initialization, cur_keyfrm_->id_==0
+                //  2. two keypoints map to the same lm (due to landmark fusion, this needs to be fixed)
+                AssertLog(cur_keyfrm_->id_==0, "checking, this should never happen");
                 // if `lm` is correctly observed, make it be checked by the local map cleaner
                 local_map_cleaner_->add_fresh_landmark(lm);
                 continue;
@@ -205,6 +208,7 @@ void mapping_module::store_new_keyframe() {
 
             // update connection
             lm->add_observation(kf, idx);
+            // spdlog::debug("add kf {} kp {} to lm {} observation", kf->id_, idx, lm->id_);
             // update geometry
             lm->update_normal_and_depth();
             lm->compute_descriptor();
@@ -231,7 +235,7 @@ void mapping_module::create_new_landmarks() {
         auto ngh_keyfrm = map_db_->getKeyframe(cur_keyfrm_->id_-i);
         if (!ngh_keyfrm) return ;
 
-        // todo [ivan] should we allow cross camera triangulation? not doing here
+        // todo [ivan] should we allow cross camera triangulation? actually dynamic object can somehow checked this way
         for (int j=0; j<cur_keyfrm_->frames.size(); ++j){
             // camera center of the current keyframe
             const Vec3_t cur_cam_center = cur_keyfrm_->at(j)->get_cam_center();
@@ -327,8 +331,9 @@ void mapping_module::update_new_keyframe() {
     }
 
     for (const auto &kf : cur_keyfrm_->frames){
+        // todo [ivan] doing here. fusion cause keyframe to observe same landmarks at different keypoints
         // resolve the duplication of landmarks between the current keyframe and the targets
-        fuse_landmark_duplication(kf, fuse_tgt_keyfrms);
+        // fuse_landmark_duplication(kf, fuse_tgt_keyfrms);
 
         // update the geometries
         const auto cur_landmarks = kf->get_landmarks();

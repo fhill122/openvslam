@@ -86,7 +86,6 @@ int main(int argc, char** argv){
     PubCloud(points, map_pub);
     spdlog::info("pub a map of {} points", points.size());
     // image
-    // todo [ivan] doing here.
     for (int i = 0; i < frame.size(); ++i) {
         cv::Mat draw;
         cv::drawKeypoints(frame[i]->img_, frame[i]->keypts_, draw);

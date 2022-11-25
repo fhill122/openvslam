@@ -6,7 +6,6 @@
 #include "openvslam/initialize/perspective.h"
 #include "openvslam/match/area.h"
 #include "openvslam/module/initializer.h"
-#include "openvslam/optimize/global_bundle_adjuster.h"
 #include "openvslam/camera/fake_stereo.h"
 #include "openvslam/data/multi_frame.h"
 
@@ -154,7 +153,7 @@ bool initializer::createMapByTriangulate(data::MultiFrame &curr_frm) {
                     const Vec4_t pos_w = curr_frm.rig->poses_inv[overlap.ind1] * pos_f1;
                     auto lm = shared_ptr<data::landmark>(new data::landmark({pos_w.x(), pos_w.y(), pos_w.z()},
                                                              kf_1, map_db_));
-                    RUN_N_TIMES(20,spdlog::debug("added a lm ({},{},{})", pts3d[k].x, pts3d[k].y, pts3d[k].z));
+                    // RUN_N_TIMES(20,spdlog::debug("added a lm ({},{},{})", pts3d[k].x, pts3d[k].y, pts3d[k].z));
 
                     // set the associations to the new keyframe
                     lm->add_observation(kf_1, ind_1);
@@ -188,6 +187,7 @@ bool initializer::createMapByTriangulate(data::MultiFrame &curr_frm) {
         kf->compute_bow();
 
     // add to the map DB
+    // [ivan] isn't mapping module will add it anyway?
     map_db_->add_keyframe(curr_keyfrm);
 
     // update the frame statistics

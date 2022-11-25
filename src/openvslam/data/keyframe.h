@@ -33,7 +33,7 @@ namespace data {
 class frame;
 class landmark;
 class map_database;
-class MultiKeyframe;
+struct MultiKeyframe;
 
 class keyframe : public std::enable_shared_from_this<keyframe> {
 public:

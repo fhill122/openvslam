@@ -92,7 +92,9 @@ void viewer::run() {
 
         // 2. draw the current frame image
         for (int i = 0; i < system_->cam_rig_->cameras.size(); ++i) {
-            cv::imshow(frame_viewer_name_ + "_" + to_string(i), frame_publisher_->draw_frame(i));
+            cv::Mat img = frame_publisher_->draw_frame(i);
+            if (!img.empty())
+                cv::imshow(frame_viewer_name_ + "_" + to_string(i), img);
         }
         cv::waitKey(interval_ms_);
 

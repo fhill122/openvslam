@@ -3,10 +3,8 @@ target_sources(${PROJECT_NAME}
                PRIVATE
                ${CMAKE_CURRENT_SOURCE_DIR}/pose_optimizer.h
                ${CMAKE_CURRENT_SOURCE_DIR}/local_bundle_adjuster.h
-               ${CMAKE_CURRENT_SOURCE_DIR}/global_bundle_adjuster.h
                ${CMAKE_CURRENT_SOURCE_DIR}/pose_optimizer.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/local_bundle_adjuster.cc
-               ${CMAKE_CURRENT_SOURCE_DIR}/global_bundle_adjuster.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/internal/se3/g2o_cubemap_vertices_edges.cpp
 )
 

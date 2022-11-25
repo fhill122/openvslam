@@ -137,6 +137,7 @@ unsigned int pose_optimizer::optimize(data::MultiFrame& frm) const {
                     }
                 }
                 else {
+                    AssertLog(false, "");
                     if (chi_sq_3D < edge->chi2()) {
                         outlier_flags[i].at(pose_opt_edge_wrap.idx_) = true;
                         pose_opt_edge_wrap.set_as_outlier();

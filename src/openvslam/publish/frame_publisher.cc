@@ -35,7 +35,9 @@ cv::Mat frame_publisher::draw_frame(int ind, bool draw_text) {
     {
         std::lock_guard<std::mutex> lock(mtx_);
 
-        imgs_[ind].copyTo(img);
+        if (imgs_.empty()) return img;
+
+        imgs_.at(ind).copyTo(img);
 
         tracking_state = tracking_state_;
 
@@ -45,12 +47,11 @@ cv::Mat frame_publisher::draw_frame(int ind, bool draw_text) {
             init_matches = init_matches_;
         }
 
-        curr_keypts = curr_keypts_[ind];
+        if (!curr_keypts_.empty()) curr_keypts = curr_keypts_.at(ind);
 
         elapsed_ms = elapsed_ms_;
 
-
-        is_tracked = is_tracked_[ind];
+        if (!is_tracked_.empty()) is_tracked = is_tracked_.at(ind);
     }
 
     // resize image
@@ -194,7 +195,7 @@ void frame_publisher::update(tracking_module* tracker) {
             break;
         }
         case tracker_state_t::Tracking: {
-            is_tracked_.resize(curr_frm.frames.size());
+            is_tracked_.resize(curr_frm.size());
             for (int i=0; i<is_tracked_.size(); ++i){
                 is_tracked_[i] = vector<bool>(curr_keypts_[i].size(), false);
                 for (int j=0; j<is_tracked_[i].size(); ++j){

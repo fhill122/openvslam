@@ -68,7 +68,7 @@ if(MSVC)
 else()
     add_compile_options(-Wall -Wextra)
     add_compile_options(
-        "$<$<CONFIG:Debug>:-Og>"
+        "$<$<CONFIG:Debug>:-O0>"
         "$<$<CONFIG:Release>:-O3>"
         "$<$<CONFIG:None>:-O3>")
 endif()

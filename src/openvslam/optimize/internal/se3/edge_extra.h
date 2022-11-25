@@ -13,7 +13,6 @@ namespace optimize {
 namespace internal {
 namespace se3 {
 
-// todo [ivan] change name, to extinguish the one in pose_opt_edge_wrapper
 struct CubeSpaceExtra {
     camera::CubeSpace::Face face;
     const Eigen::Matrix4d& T_B_C;

@@ -113,7 +113,7 @@ public:
     tracker_state_t last_tracking_state_ = tracker_state_t::NotInitialized;
 
     //! current frame and its image
-    data::MultiFrame curr_frm_;
+    data::MultiFrame curr_frm_{(unsigned int)0};
     //! image of the current frame. saved for visualization
     // cv::Mat img_gray_;
     std::vector<cv::Mat> imgs_gray_;
@@ -199,7 +199,7 @@ protected:
     unsigned int num_tracked_lms_ = 0;
 
     //! last frame
-    data::MultiFrame last_frm_;
+    data::MultiFrame last_frm_{(unsigned int)0};
 
     //! latest frame ID which succeeded in relocalization
     unsigned int last_reloc_frm_id_ = 0;

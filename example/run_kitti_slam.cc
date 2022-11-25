@@ -26,7 +26,6 @@
 #include <gperftools/profiler.h>
 #endif
 
-// todo [ivan] doing here. to multi cam tracking
 void multiTracking(const std::shared_ptr<openvslam::config>& cfg,
                      const std::string& vocab_file_path, const std::string& sequence_dir_path,
                      const unsigned int frame_skip, const bool no_sleep, const bool auto_term,
@@ -49,6 +48,7 @@ void multiTracking(const std::shared_ptr<openvslam::config>& cfg,
 
     // run the SLAM in another thread
     std::thread thread([&]() {
+        pthread_setname_np("tracking");
         for (unsigned int i = 0; i < frames.size(); ++i) {
             const auto& frame = frames.at(i);
             const auto left_img = cv::imread(frame.left_img_path_, cv::IMREAD_UNCHANGED);
@@ -57,6 +57,7 @@ void multiTracking(const std::shared_ptr<openvslam::config>& cfg,
             const auto tp_1 = std::chrono::steady_clock::now();
 
             if (!left_img.empty() && !right_img.empty() && (i % frame_skip == 0)) {
+                spdlog::debug("track frame {}", i);
                 // input the current frame and estimate the camera pose
                 SLAM.feed_multi_frames({left_img, right_img}, frame.timestamp_);
             }
@@ -69,8 +70,9 @@ void multiTracking(const std::shared_ptr<openvslam::config>& cfg,
             }
 
             // wait until the timestamp of the next frame
+            constexpr double kSpeedRate = 0.5;
             if (!no_sleep && i < frames.size() - 1) {
-                const auto wait_time = frames.at(i + 1).timestamp_ - (frame.timestamp_ + track_time);
+                const auto wait_time = (frames.at(i + 1).timestamp_ - frame.timestamp_)/kSpeedRate - track_time;
                 if (0.0 < wait_time) {
                     std::this_thread::sleep_for(std::chrono::microseconds(static_cast<unsigned int>(wait_time * 1e6)));
                 }

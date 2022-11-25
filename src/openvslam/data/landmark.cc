@@ -5,6 +5,7 @@
 #include "openvslam/match/base.h"
 
 #include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
 
 namespace openvslam {
 namespace data {

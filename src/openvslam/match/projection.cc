@@ -5,6 +5,8 @@
 #include "openvslam/match/projection.h"
 #include "openvslam/match/angle_checker.h"
 
+#include <spdlog/spdlog.h>
+
 namespace openvslam {
 namespace match {
 
@@ -75,6 +77,7 @@ unsigned int projection::match_frame_and_landmarks(data::frame& frm, const std::
 
         if (best_hamm_dist <= HAMMING_DIST_THR_HIGH) {
             // Lowe's ratio test
+            // todo [ivan] no way to check if at different scale level?
             if (best_scale_level == second_best_scale_level && best_hamm_dist > lowe_ratio_ * second_best_hamm_dist) {
                 continue;
             }
@@ -88,6 +91,7 @@ unsigned int projection::match_frame_and_landmarks(data::frame& frm, const std::
     return num_matches;
 }
 
+// todo [ivan] should use optical flow
 unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, const data::frame& last_frm, const float margin) const {
     unsigned int num_matches = 0;
 
@@ -102,16 +106,6 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
     const Vec3_t trans_lw = last_frm.cam_pose_cw_.block<3, 1>(0, 3);
 
     const Vec3_t trans_lc = rot_lw * trans_wc + trans_lw;
-
-    // For non-monocular, check if the z component of the current-to-last translation vector is moving forward
-    // The z component is positive going -> moving forward
-    const bool assume_forward = (curr_frm.camera_->setup_type_ == camera::setup_type_t::Monocular)
-                                    ? false
-                                    : trans_lc(2) > curr_frm.camera_->true_baseline_;
-    // The z component is negative going -> moving backward
-    const bool assume_backward = (curr_frm.camera_->setup_type_ == camera::setup_type_t::Monocular)
-                                     ? false
-                                     : -trans_lc(2) > curr_frm.camera_->true_baseline_;
 
     // Reproject the 3D points associated to the keypoints of the last frame,
     // then acquire the 2D-3D matches
@@ -142,21 +136,11 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
         // Acquire keypoints in the cell where the reprojected 3D points exist
         const auto last_scale_level = last_frm.keypts_.at(idx_last).octave;
         std::vector<unsigned int> indices;
-        if (assume_forward) {
-            indices = curr_frm.get_keypoints_in_cell(reproj(0), reproj(1),
-                                                     margin * curr_frm.scale_factors_.at(last_scale_level),
-                                                     last_scale_level, last_frm.num_scale_levels_ - 1);
-        }
-        else if (assume_backward) {
-            indices = curr_frm.get_keypoints_in_cell(reproj(0), reproj(1),
-                                                     margin * curr_frm.scale_factors_.at(last_scale_level),
-                                                     0, last_scale_level);
-        }
-        else {
-            indices = curr_frm.get_keypoints_in_cell(reproj(0), reproj(1),
-                                                     margin * curr_frm.scale_factors_.at(last_scale_level),
-                                                     last_scale_level - 1, last_scale_level + 1);
-        }
+
+        indices = curr_frm.get_keypoints_in_cell(reproj(0), reproj(1),
+                                                 margin * curr_frm.scale_factors_.at(last_scale_level),
+                                                 last_scale_level - 1, last_scale_level + 1);
+
         if (indices.empty()) {
             continue;
         }

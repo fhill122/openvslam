@@ -6,7 +6,7 @@
 namespace openvslam {
 
 namespace data {
-class MultiKeyframe;
+struct MultiKeyframe;
 class map_database;
 } // namespace data
 

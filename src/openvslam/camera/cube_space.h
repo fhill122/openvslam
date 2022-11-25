@@ -37,18 +37,6 @@ public:
         CubePoint(Face face, float u, float v):face(face), u(u), v(v){};
     };
 
-    static constexpr int kCoordEnc = 10000;  // apply to u only
-
-    static inline std::tuple<Face,float,float> ToFaceCoord(float u, float v){
-        int face = u/kCoordEnc;
-        float u_out = u - face*kCoordEnc;
-        return {(Face)face, u, v};
-    }
-
-    static inline std::tuple<float,float> ToCompactCoord(Face face, float u, float v){
-        return {((int)face)*kCoordEnc+u, v};
-    }
-
     template<class F>
     static void RotationToFace(Face face, Eigen::Matrix<F,3,3> &R_local);
 

@@ -47,15 +47,16 @@ struct MultiKeyframe : std::enable_shared_from_this<MultiKeyframe>{
 private:
     // MultiKeyframe() = default;
     // todo [ivan] should take frames?
-    MultiKeyframe(camera::CameraRig* rig): id_(next_id_.fetch_add(std::memory_order_relaxed)), rig(rig){
+    MultiKeyframe(camera::CameraRig* rig): id_(next_id_.fetch_add(1, std::memory_order_relaxed)), rig(rig){
         frames.reserve(rig->cameras.size());
     }
 
     MultiKeyframe(const MultiFrame &m_frame, map_database* map_db) :
-          id_(next_id_.fetch_add(std::memory_order_relaxed)), rig(m_frame.rig){
+          id_(next_id_.fetch_add(1, std::memory_order_relaxed)), rig(m_frame.rig){
         for (int i=0; i<m_frame.frames.size(); ++i) {
             frames.emplace_back(keyframe::make_keyframe(this, i, *m_frame.frames[i], map_db));
         }
+        setCamPose(m_frame.cam_pose_cw_);
     }
 
 
